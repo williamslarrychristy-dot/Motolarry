@@ -1,0 +1,138 @@
+Product Catalog and Metadata
+Product name and description. Every item needs a clear name and a description that appears on transactions and helps staff identify the part quickly.
+
+SKU (Stock Keeping Unit). A unique internal code for tracking each product. This is how the system distinguishes one part from another.
+
+Barcode. A scannable code attached to the product for fast checkout and stock counting.
+
+Category and subcategory. Grouping products by type (e.g., Engine, Brakes, Transmission) so you can filter, report, and organize your catalog.
+
+Brand and Manufacturer. The company that made the part. Essential for a moto parts shop where customers ask for "Honda chain" or "Yamaha brake pads."
+
+Application and Fitment. Which motorcycle model the part fits. This is critical for a moto parts shop. Customers need to know if a sprocket fits a CB400 or a Ninja.
+
+Cost price. What Williams Larry paid for the part. Required for profit calculation and margin reporting.
+
+Sales price. What the customer pays. This is the price used at checkout.
+
+MSRP and RRP. Manufacturer's suggested retail price. Useful as a reference point for pricing decisions.
+
+Quantity on hand. Current stock level. Auto-decrements on every sale.
+
+Reorder point. The stock level at which the system alerts you to reorder. Prevents stockouts on fast-moving parts.
+
+Reorder quantity. How many units to order when restocking.
+
+Location and Bin location. Where the part physically sits in the shop (e.g., "Shelf A1"). Staff need this to find parts quickly.
+
+Product images. One or more images per product. Images appear in the product list, on transactions, and in the POS interface. Recommended specs: minimum 1920x1080 pixels, 16:9 aspect ratio, JPEG or PNG format.
+
+Aliases and Alternative names. Common names customers use that aren't the official product name (e.g., "comp chain" for "Chain Sprocket Kit"). This is what makes the AI search work.
+
+Active and Inactive status. Whether the product is currently sellable. Inactive products don't appear in the POS.
+
+Tags. Custom labels for filtering (e.g., "fast-moving," "seasonal," "Honda-specific").
+
+Serial number and Chassis number tracking. For high-value parts (ECU, carburetor, frame), record the serial number for warranty and repair history. Not needed for screws or washers.
+
+Stock Control
+Real-time stock deduction on sale. Every sale immediately subtracts from the product's quantity.
+
+Stock cannot go negative. If stock is 3 and someone tries to sell 5, the sale is rejected.
+
+Low stock alerts. Products at or below reorder point get flagged visually.
+
+Stock movement log. Every stock change (sale, restock, damage, return, adjustment) creates an immutable record with timestamp, user, and reason.
+
+Manual stock adjustment. Ability to correct stock counts with a required reason (e.g., "physical count correction," "damaged item").
+
+Returns and refunds. Process a customer return, add stock back, and create a negative sale record for accounting.
+
+Physical count mode. Enter actual shelf counts, see the difference, and record the adjustment.
+
+Sales and Checkout
+Product search at POS. Find products by name, SKU, barcode, or alias.
+
+Cart and basket. Add multiple items to a single sale before checkout.
+
+Quantity selection. Choose how many of each item the customer is buying.
+
+Payment method. Record whether the sale was cash, transfer, card, or credit.
+
+Sale completion. Record the sale, decrement stock, log the movement, and update analytics, all in one transaction.
+
+Sale history. View all past sales with date, products, quantity, total, and profit.
+
+Immutable sales. Once a sale is recorded, it cannot be edited or deleted. Errors are corrected with a new entry (return or adjustment).
+
+Receipt and invoice generation. After each sale, generate a printable or electronically sendable receipt showing transaction details, items, totals, and payment method.
+
+Analytics and Reporting
+Today's revenue. Total sales value for the current day.
+
+Today's profit. Revenue minus cost of goods sold for the day.
+
+Week and month revenue and profit. Broader performance view.
+
+Top products by quantity sold. What's moving fastest.
+
+Top brands by quantity sold. Which manufacturers drive your business.
+
+Top categories by quantity sold. Which part types sell most.
+
+Slow movers. Products with no sales in 30, 60, or 90 days. This is cash sitting on the shelf.
+
+Low stock list. All products at or below reorder point.
+
+Profit margin per product. Which products make the most money, not just the most sales.
+
+Demand forecasting. Based on historical sales, the system suggests what to stock and how much. For a moto parts shop, this means stocking more chains and brake pads before rainy season.
+
+Admin and Security
+Admin PIN. A numeric PIN that unlocks sensitive actions. Only Williams Larry knows it.
+
+Admin-only actions. Adding products, editing prices, adjusting stock, deleting products, and approving changes all require the PIN.
+
+Approval workflow. When a non-admin wants to change a price or adjust stock, it goes into a pending queue. Admin approves or rejects.
+
+Role separation. Sales staff can sell and view products. They cannot edit prices, delete products, or adjust stock directly.
+
+Audit trail. Every action (who did what, when) is logged. This is how you catch shrinkage and mistakes.
+
+Customers and Loyalty
+Customer profiles. Record customer name, phone, motorcycle model, and purchase history. When a customer returns asking "do you still have that chain I bought last time," you can look it up.
+
+Purchase history per customer. See everything a customer has bought, when, and for how much.
+
+Credit and store credit tracking. If Williams Larry allows regulars to buy on credit, the system tracks their outstanding balance and repayment.
+
+Gift cards. Issue and redeem gift cards. The system tracks remaining balance.
+
+Purchasing and Suppliers
+Supplier records. Store supplier name, contact, phone, email, and the parts they supply.
+
+Purchase order creation. When stock hits reorder point, generate a purchase order to send to the supplier.
+
+Purchase order receiving. When stock arrives, mark the purchase order as received and update stock automatically.
+
+Bulk import and export. Import product catalog from CSV or Excel. Export sales records for external reconciliation.
+
+User Experience
+Product grid for POS. Visual cards showing product name, price, stock badge, and image. Fast for counter use.
+
+Search bar. Natural-language search that uses aliases and AI to find products even when the customer describes them instead of naming them.
+
+Mobile responsive. Works on phone, tablet, and desktop.
+
+Dark theme. Easy on the eyes for long shifts.
+
+Currency formatting. All prices in NGN.
+
+Staff Management
+Employee records. If Williams Larry hires sales assistants, record who works when.
+
+Shift clock-in and clock-out. Track when staff start and end their shift.
+
+Sales by employee. See how much each staff member sold.
+
+Commission tracking. If staff earn commission, the system calculates it automatically.

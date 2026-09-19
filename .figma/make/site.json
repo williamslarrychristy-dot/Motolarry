@@ -1,0 +1,11 @@
+{
+  "title": "Moto Larry",
+  "description": "Manage and track inventory efficiently with import/export features, CSV templates, and secure database storage for streamlined business operations.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
