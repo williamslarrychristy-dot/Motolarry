@@ -1,13 +1,12 @@
 import { useState } from 'react';
-import { getSuppliers, saveSuppliers, getPOs, savePOs, getProducts, fmt, uid, Supplier, PurchaseOrder } from '../store';
-import { Plus, X, Save, Package, Truck } from 'lucide-react';
+import { uid, Supplier, PurchaseOrder } from '../store';
+import { useData } from '../DataContext';
+import { Plus, X, Save, Truck } from 'lucide-react';
 
 const EMPTY: Omit<Supplier, 'id'> = { name: '', contact: '', phone: '', email: '', parts: '' };
 
 export default function Suppliers() {
-  const [suppliers, setSuppliers] = useState(getSuppliers);
-  const [pos, setPOs] = useState(getPOs);
-  const [products] = useState(getProducts);
+  const { suppliers, pos, products, setSuppliers, setPOs, setProducts } = useData();
   const [tab, setTab] = useState<'suppliers' | 'orders'>('suppliers');
   const [editing, setEditing] = useState<Supplier | null>(null);
   const [isNew, setIsNew] = useState(false);
@@ -15,38 +14,30 @@ export default function Suppliers() {
   const [newPO, setNewPO] = useState<{ supplierId: string; items: { productId: string; qty: number; unitCost: number }[] } | null>(null);
 
   function saveSupplier() {
-    let updated: Supplier[];
-    if (isNew) updated = [...suppliers, { ...form, id: uid() }];
-    else if (editing) updated = suppliers.map(s => s.id === editing.id ? { ...editing, ...form } : s);
-    else return;
-    setSuppliers(updated); saveSuppliers(updated);
+    if (isNew) setSuppliers([...suppliers, { ...form, id: uid() }]);
+    else if (editing) setSuppliers(suppliers.map(s => s.id === editing.id ? { ...editing, ...form } : s));
     setIsNew(false); setEditing(null);
   }
 
   function createPO() {
-    if (!newPO || !newPO.supplierId || newPO.items.length === 0) return;
-    const itemsWithNames = newPO.items.filter(i => i.productId && i.qty > 0).map(i => {
+    if (!newPO?.supplierId || !newPO.items.length) return;
+    const items = newPO.items.filter(i => i.productId && i.qty > 0).map(i => {
       const p = products.find(x => x.id === i.productId);
       return { productId: i.productId, name: p?.name || '', qty: i.qty, unitCost: i.unitCost || p?.costPrice || 0 };
     });
-    const po: PurchaseOrder = { id: uid(), supplierId: newPO.supplierId, items: itemsWithNames, status: 'draft', createdAt: new Date().toISOString() };
-    const updated = [...pos, po];
-    setPOs(updated); savePOs(updated);
+    const po: PurchaseOrder = { id: uid(), supplierId: newPO.supplierId, items, status: 'draft', createdAt: new Date().toISOString() };
+    setPOs([...pos, po]);
     setNewPO(null);
   }
 
   function receivePO(id: string) {
     const po = pos.find(p => p.id === id);
     if (!po) return;
-    // Update stock in localStorage directly
-    const storedProds = JSON.parse(localStorage.getItem('inv_products') || '[]');
-    const updatedProds = storedProds.map((p: any) => {
-      const item = po.items.find((i: any) => i.productId === p.id);
+    setProducts(products.map(p => {
+      const item = po.items.find(i => i.productId === p.id);
       return item ? { ...p, qty: p.qty + item.qty } : p;
-    });
-    localStorage.setItem('inv_products', JSON.stringify(updatedProds));
-    const updated = pos.map(p => p.id === id ? { ...p, status: 'received' as const, receivedAt: new Date().toISOString() } : p);
-    setPOs(updated); savePOs(updated);
+    }));
+    setPOs(pos.map(p => p.id === id ? { ...p, status: 'received' as const, receivedAt: new Date().toISOString() } : p));
   }
 
   function f(k: keyof typeof form, v: string) { setForm(prev => ({ ...prev, [k]: v })); }
@@ -61,12 +52,9 @@ export default function Suppliers() {
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         {(['suppliers', 'orders'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{
-            padding: '7px 16px', borderRadius: 'var(--radius)', fontSize: 13,
-            background: tab === t ? 'var(--primary)' : 'var(--secondary)',
-            color: tab === t ? 'var(--primary-foreground)' : 'var(--foreground)',
-            textTransform: 'capitalize',
-          }}>{t === 'orders' ? 'Purchase Orders' : 'Suppliers'}</button>
+          <button key={t} onClick={() => setTab(t)} style={{ padding: '7px 16px', borderRadius: 'var(--radius)', fontSize: 13, background: tab === t ? 'var(--primary)' : 'var(--secondary)', color: tab === t ? 'var(--primary-foreground)' : 'var(--foreground)', textTransform: 'capitalize' }}>
+            {t === 'orders' ? 'Purchase Orders' : 'Suppliers'}
+          </button>
         ))}
       </div>
 
@@ -79,7 +67,9 @@ export default function Suppliers() {
               </button>
             </div>
             <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
-              {suppliers.map((s, i) => (
+              {suppliers.length === 0 ? (
+                <div style={{ padding: 32, textAlign: 'center', color: 'var(--muted-foreground)' }}>No suppliers yet</div>
+              ) : suppliers.map((s, i) => (
                 <div key={s.id} onClick={() => openEdit(s)} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderBottom: i < suppliers.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--secondary)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
@@ -177,7 +167,7 @@ export default function Suppliers() {
                 </tr>
               </thead>
               <tbody>
-                {pos.map((po, i) => {
+                {pos.map((po) => {
                   const supplier = suppliers.find(s => s.id === po.supplierId);
                   const colors = { draft: '#6b7280', sent: '#f59e0b', received: '#22c55e' };
                   return (
@@ -191,9 +181,7 @@ export default function Suppliers() {
                       </td>
                       <td style={{ padding: '10px 14px' }}>
                         {po.status !== 'received' && (
-                          <button onClick={() => receivePO(po.id)} style={{ background: 'var(--secondary)', color: 'var(--foreground)', borderRadius: 4, padding: '4px 10px', fontSize: 11 }}>
-                            Mark Received
-                          </button>
+                          <button onClick={() => receivePO(po.id)} style={{ background: 'var(--secondary)', color: 'var(--foreground)', borderRadius: 4, padding: '4px 10px', fontSize: 11 }}>Mark Received</button>
                         )}
                       </td>
                     </tr>

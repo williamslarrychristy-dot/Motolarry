@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag, Users } from 'lucide-react';
-import { getProducts, getSales, getCustomers, fmt } from '../store';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag } from 'lucide-react';
+import { fmt } from '../store';
+import { useData } from '../DataContext';
 
 function StatCard({ label, value, sub, icon, accent }: { label: string; value: string; sub?: string; icon: React.ReactNode; accent?: boolean }) {
   return (
@@ -16,24 +17,20 @@ function StatCard({ label, value, sub, icon, accent }: { label: string; value: s
   );
 }
 
-const CUSTOM_TOOLTIP = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, padding: '10px 14px', fontSize: 12 }}>
       <div style={{ fontWeight: 600, marginBottom: 6 }}>{label}</div>
       {payload.map((p: any) => (
-        <div key={p.name} style={{ color: p.color }}>
-          {p.name}: {fmt(p.value)}
-        </div>
+        <div key={p.name} style={{ color: p.color }}>{p.name}: {fmt(p.value)}</div>
       ))}
     </div>
   );
 };
 
 export default function Dashboard() {
-  const products = getProducts();
-  const sales = getSales();
-  const customers = getCustomers();
+  const { products, sales, customers } = useData();
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const todaySales = sales.filter(s => new Date(s.timestamp) >= today);
@@ -47,9 +44,8 @@ export default function Dashboard() {
 
   const lowStock = products.filter(p => p.active && p.qty <= p.reorderPoint);
 
-  // Daily chart last 7 days
   const dailyData = useMemo(() => {
-    const days: { day: string; revenue: number; profit: number }[] = [];
+    const days = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today); d.setDate(d.getDate() - i);
       const next = new Date(d); next.setDate(next.getDate() + 1);
@@ -63,7 +59,6 @@ export default function Dashboard() {
     return days;
   }, [sales]);
 
-  // Top products
   const topProducts = useMemo(() => {
     const map: Record<string, { name: string; qty: number; revenue: number }> = {};
     sales.forEach(sale => sale.items.forEach(item => {
@@ -83,7 +78,6 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Stats grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 28 }}>
         <StatCard label="Today's Revenue" value={fmt(todayRevenue)} sub={`${todaySales.length} sales`} icon={<DollarSign size={16} />} accent />
         <StatCard label="Today's Profit" value={fmt(todayProfit)} sub={`${todayRevenue > 0 ? ((todayProfit / todayRevenue) * 100).toFixed(0) : 0}% margin`} icon={<TrendingUp size={16} />} />
@@ -94,43 +88,38 @@ export default function Dashboard() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16, marginBottom: 16 }}>
-        {/* Revenue chart */}
         <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '20px 24px' }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16 }}>Revenue & Profit — Last 7 Days</div>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={dailyData} barGap={4}>
               <XAxis dataKey="day" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `₦${(v / 1000).toFixed(0)}k`} />
-              <Tooltip content={<CUSTOM_TOOLTIP />} />
+              <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="revenue" name="Revenue" fill="rgba(249,115,22,0.8)" radius={[3, 3, 0, 0]} />
               <Bar dataKey="profit" name="Profit" fill="rgba(249,115,22,0.3)" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Top products */}
         <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '20px 24px' }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16 }}>Top Products by Qty</div>
           {topProducts.length === 0 ? (
             <div style={{ color: 'var(--muted-foreground)', fontSize: 12 }}>No sales yet</div>
-          ) : (
-            topProducts.map((p, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < topProducts.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ width: 20, height: 20, borderRadius: '50%', background: i === 0 ? 'var(--primary)' : 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: i === 0 ? 'var(--primary-foreground)' : 'var(--muted-foreground)', flexShrink: 0 }}>{i + 1}</span>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 500, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted-foreground)', fontFamily: 'var(--font-mono-face)' }}>{p.qty} units</div>
-                  </div>
+          ) : topProducts.map((p, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < topProducts.length - 1 ? '1px solid var(--border)' : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ width: 20, height: 20, borderRadius: '50%', background: i === 0 ? 'var(--primary)' : 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: i === 0 ? 'var(--primary-foreground)' : 'var(--muted-foreground)', flexShrink: 0 }}>{i + 1}</span>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 500, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted-foreground)', fontFamily: 'var(--font-mono-face)' }}>{p.qty} units</div>
                 </div>
-                <div style={{ fontSize: 12, fontFamily: 'var(--font-mono-face)', color: 'var(--muted-foreground)' }}>{fmt(p.revenue)}</div>
               </div>
-            ))
-          )}
+              <div style={{ fontSize: 12, fontFamily: 'var(--font-mono-face)', color: 'var(--muted-foreground)' }}>{fmt(p.revenue)}</div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Low stock */}
       {lowStock.length > 0 && (
         <div style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 'var(--radius)', padding: '16px 20px' }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#ef4444', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>

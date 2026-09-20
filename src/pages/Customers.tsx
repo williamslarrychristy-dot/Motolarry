@@ -1,30 +1,25 @@
 import { useState } from 'react';
-import { getCustomers, saveCustomers, getSales, fmt, uid, Customer } from '../store';
+import { uid, Customer } from '../store';
+import { useData } from '../DataContext';
 import { Plus, X, Save, User } from 'lucide-react';
 
 const EMPTY: Omit<Customer, 'id' | 'createdAt'> = { name: '', phone: '', motorcycle: '', balance: 0 };
 
 export default function Customers() {
-  const [customers, setCustomers] = useState(getCustomers);
-  const [sales] = useState(getSales);
+  const { customers, sales, setCustomers } = useData();
   const [selected, setSelected] = useState<Customer | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [form, setForm] = useState(EMPTY);
 
   function save() {
-    let updated: Customer[];
     if (isNew) {
-      updated = [...customers, { ...form, id: uid(), createdAt: new Date().toISOString() }];
+      setCustomers([...customers, { ...form, id: uid(), createdAt: new Date().toISOString() }]);
     } else if (selected) {
-      updated = customers.map(c => c.id === selected.id ? { ...selected, ...form } : c);
-    } else return;
-    setCustomers(updated); saveCustomers(updated);
+      setCustomers(customers.map(c => c.id === selected.id ? { ...selected, ...form } : c));
+    }
     setIsNew(false); setSelected(null);
   }
-  function openEdit(c: Customer) {
-    const { id, createdAt, ...rest } = c;
-    setForm(rest); setSelected(c); setIsNew(false);
-  }
+  function openEdit(c: Customer) { const { id, createdAt, ...rest } = c; setForm(rest); setSelected(c); setIsNew(false); }
   function openNew() { setForm(EMPTY); setIsNew(true); setSelected(null); }
   function f(k: keyof typeof form, v: string | number) { setForm(prev => ({ ...prev, [k]: v })); }
 
@@ -44,15 +39,13 @@ export default function Customers() {
         </div>
 
         <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
-          {customers.map((c, i) => {
+          {customers.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--muted-foreground)' }}>No customers yet</div>
+          ) : customers.map((c, i) => {
             const cs = customerSales(c.id);
             const totalSpent = cs.reduce((a, s) => a + s.total, 0);
             return (
-              <div key={c.id} onClick={() => openEdit(c)} style={{
-                display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
-                borderBottom: i < customers.length - 1 ? '1px solid var(--border)' : 'none',
-                cursor: 'pointer', transition: 'background 0.1s',
-              }}
+              <div key={c.id} onClick={() => openEdit(c)} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderBottom: i < customers.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'var(--secondary)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                 <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--muted-foreground)' }}>
@@ -63,18 +56,16 @@ export default function Customers() {
                   <div style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>{c.phone} · {c.motorcycle}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 12, fontFamily: 'var(--font-mono-face)', fontWeight: 600 }}>{fmt(totalSpent)}</div>
+                  <div style={{ fontSize: 12, fontFamily: 'var(--font-mono-face)', fontWeight: 600 }}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(totalSpent)}</div>
                   <div style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>{cs.length} purchases</div>
-                  {c.balance > 0 && <div style={{ fontSize: 11, color: '#ef4444', fontFamily: 'var(--font-mono-face)' }}>Owes {fmt(c.balance)}</div>}
+                  {c.balance > 0 && <div style={{ fontSize: 11, color: '#ef4444', fontFamily: 'var(--font-mono-face)' }}>Owes {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(c.balance)}</div>}
                 </div>
               </div>
             );
           })}
-          {customers.length === 0 && <div style={{ padding: 32, textAlign: 'center', color: 'var(--muted-foreground)' }}>No customers yet</div>}
         </div>
       </div>
 
-      {/* Form panel */}
       {(isNew || selected) && (
         <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 20, height: 'fit-content' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -90,25 +81,22 @@ export default function Customers() {
             ))}
           </div>
 
-          {selected && (
+          {selected && customerSales(selected.id).length > 0 && (
             <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Purchase History</div>
-              {customerSales(selected.id).slice(-5).reverse().map((s, i) => (
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Recent Purchases</div>
+              {customerSales(selected.id).slice(-5).reverse().map((s) => (
                 <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '5px 0', borderBottom: '1px solid var(--border)', color: 'var(--muted-foreground)' }}>
                   <span>{new Date(s.timestamp).toLocaleDateString('en-NG')}</span>
                   <span>{s.items.length} item(s)</span>
-                  <span style={{ fontFamily: 'var(--font-mono-face)', color: 'var(--primary)' }}>{fmt(s.total)}</span>
+                  <span style={{ fontFamily: 'var(--font-mono-face)', color: 'var(--primary)' }}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(s.total)}</span>
                 </div>
               ))}
-              {customerSales(selected.id).length === 0 && <div style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>No purchases yet</div>}
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-            <button onClick={save} style={{ flex: 1, background: 'var(--primary)', color: 'var(--primary-foreground)', borderRadius: 'var(--radius)', padding: '9px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              <Save size={13} /> Save
-            </button>
-          </div>
+          <button onClick={save} style={{ width: '100%', marginTop: 16, background: 'var(--primary)', color: 'var(--primary-foreground)', borderRadius: 'var(--radius)', padding: 10, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <Save size={13} /> Save
+          </button>
         </div>
       )}
     </div>

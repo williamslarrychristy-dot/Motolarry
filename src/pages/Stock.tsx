@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { getProducts, saveProducts, getMovements, saveMovements, fmt, uid, Product, StockMovement } from '../store';
-import { ArrowUpDown, Plus, AlertTriangle } from 'lucide-react';
+import { uid, StockMovement } from '../store';
+import { useData } from '../DataContext';
+import { AlertTriangle } from 'lucide-react';
 
 const REASONS = ['Physical count correction', 'Damaged item', 'Theft/loss', 'Supplier return', 'Manual restock', 'Other'];
 
 export default function Stock() {
-  const [products, setProducts] = useState(getProducts);
-  const [movements, setMovements] = useState(getMovements);
+  const { products, movements, settings, setProducts, setMovements } = useData();
   const [tab, setTab] = useState<'overview' | 'movements' | 'adjust'>('overview');
   const [adjustProduct, setAdjustProduct] = useState('');
   const [adjustQty, setAdjustQty] = useState(0);
@@ -18,20 +18,18 @@ export default function Stock() {
   const lowStock = products.filter(p => p.active && p.qty <= p.reorderPoint);
 
   function applyAdjustment() {
-    const { adminPin } = JSON.parse(localStorage.getItem('inv_settings') || '{"adminPin":"1234"}');
-    if (pin !== adminPin) { setPinError('Incorrect admin PIN'); return; }
+    if (pin !== settings.adminPin) { setPinError('Incorrect admin PIN'); return; }
     if (!adjustProduct) return;
     const product = products.find(p => p.id === adjustProduct);
     if (!product) return;
     const newQty = Math.max(0, product.qty + adjustQty);
-    const updated = products.map(p => p.id === adjustProduct ? { ...p, qty: newQty } : p);
     const mv: StockMovement = {
       id: uid(), productId: adjustProduct, type: 'adjustment',
       qty: adjustQty, reason: `${adjustReason}${adjustNote ? ': ' + adjustNote : ''}`,
       userId: 'admin', timestamp: new Date().toISOString(),
     };
-    setProducts(updated); saveProducts(updated);
-    setMovements(prev => [...prev, mv]); saveMovements([...movements, mv]);
+    setProducts(products.map(p => p.id === adjustProduct ? { ...p, qty: newQty } : p));
+    setMovements([...movements, mv]);
     setAdjustQty(0); setAdjustReason(REASONS[0]); setAdjustNote(''); setPin(''); setPinError('');
     setTab('movements');
   }
@@ -47,12 +45,9 @@ export default function Stock() {
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         {(['overview', 'movements', 'adjust'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{
-            padding: '7px 16px', borderRadius: 'var(--radius)', fontSize: 13, fontWeight: 500,
-            background: tab === t ? 'var(--primary)' : 'var(--secondary)',
-            color: tab === t ? 'var(--primary-foreground)' : 'var(--foreground)',
-            textTransform: 'capitalize',
-          }}>{t === 'adjust' ? 'Manual Adjust (Admin)' : t.charAt(0).toUpperCase() + t.slice(1)}</button>
+          <button key={t} onClick={() => setTab(t)} style={{ padding: '7px 16px', borderRadius: 'var(--radius)', fontSize: 13, fontWeight: 500, background: tab === t ? 'var(--primary)' : 'var(--secondary)', color: tab === t ? 'var(--primary-foreground)' : 'var(--foreground)', textTransform: 'capitalize' }}>
+            {t === 'adjust' ? 'Manual Adjust (Admin)' : t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
         ))}
       </div>
 
@@ -73,7 +68,7 @@ export default function Stock() {
                 </tr>
               </thead>
               <tbody>
-                {products.filter(p => p.active).map((p, i) => {
+                {products.filter(p => p.active).map((p) => {
                   const isLow = p.qty <= p.reorderPoint;
                   const isWarning = !isLow && p.qty <= p.reorderPoint * 2;
                   return (
@@ -82,8 +77,7 @@ export default function Stock() {
                       <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono-face)', fontSize: 11, color: 'var(--muted-foreground)' }}>{p.sku}</td>
                       <td style={{ padding: '10px 14px', fontSize: 12 }}>{p.location || '—'}</td>
                       <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono-face)', fontWeight: 700, color: isLow ? '#ef4444' : isWarning ? '#f59e0b' : 'var(--foreground)' }}>
-                        {isLow && <AlertTriangle size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />}
-                        {p.qty}
+                        {isLow && <AlertTriangle size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />}{p.qty}
                       </td>
                       <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono-face)', fontSize: 12 }}>{p.reorderPoint}</td>
                       <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono-face)', fontSize: 12 }}>{p.reorderQty}</td>
@@ -95,6 +89,9 @@ export default function Stock() {
                     </tr>
                   );
                 })}
+                {products.filter(p => p.active).length === 0 && (
+                  <tr><td colSpan={7} style={{ padding: 32, textAlign: 'center', color: 'var(--muted-foreground)' }}>No products yet</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -112,7 +109,7 @@ export default function Stock() {
               </tr>
             </thead>
             <tbody>
-              {[...movements].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map((m, i) => {
+              {[...movements].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map((m) => {
                 const product = products.find(p => p.id === m.productId);
                 return (
                   <tr key={m.id} style={{ borderBottom: '1px solid var(--border)' }}>
@@ -121,15 +118,13 @@ export default function Stock() {
                     <td style={{ padding: '10px 14px' }}>
                       <span style={{ background: `${typeColors[m.type]}22`, color: typeColors[m.type], border: `1px solid ${typeColors[m.type]}44`, borderRadius: 4, padding: '2px 8px', fontSize: 10, fontWeight: 600, textTransform: 'uppercase' }}>{m.type}</span>
                     </td>
-                    <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono-face)', fontSize: 13, fontWeight: 700, color: m.qty > 0 ? '#22c55e' : '#ef4444' }}>
-                      {m.qty > 0 ? '+' : ''}{m.qty}
-                    </td>
+                    <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono-face)', fontSize: 13, fontWeight: 700, color: m.qty > 0 ? '#22c55e' : '#ef4444' }}>{m.qty > 0 ? '+' : ''}{m.qty}</td>
                     <td style={{ padding: '10px 14px', fontSize: 12 }}>{m.reason}</td>
                     <td style={{ padding: '10px 14px', fontSize: 12 }}>{m.userId}</td>
                   </tr>
                 );
               })}
-              {movements.length === 0 && <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: 'var(--muted-foreground)' }}>No movements recorded</td></tr>}
+              {movements.length === 0 && <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: 'var(--muted-foreground)' }}>No movements recorded yet</td></tr>}
             </tbody>
           </table>
         </div>
@@ -165,7 +160,7 @@ export default function Stock() {
                 <input type="password" value={pin} onChange={e => { setPin(e.target.value); setPinError(''); }} placeholder="••••" style={{ width: '100%', letterSpacing: 6 }} maxLength={8} />
                 {pinError && <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{pinError}</div>}
               </div>
-              <button onClick={applyAdjustment} style={{ background: 'var(--primary)', color: 'var(--primary-foreground)', borderRadius: 'var(--radius)', padding: '10px 20px', fontWeight: 600, marginTop: 4 }}>
+              <button onClick={applyAdjustment} style={{ background: 'var(--primary)', color: 'var(--primary-foreground)', borderRadius: 'var(--radius)', padding: '10px 20px', fontWeight: 600 }}>
                 Apply Adjustment
               </button>
             </div>

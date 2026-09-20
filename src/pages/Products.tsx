@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, Search, Edit2, ToggleLeft, ToggleRight, AlertTriangle, X, Save } from 'lucide-react';
-import { getProducts, saveProducts, getSuppliers, fmt, uid, Product } from '../store';
+import { uid, Product } from '../store';
+import { useData } from '../DataContext';
 
 const EMPTY: Omit<Product, 'id' | 'createdAt'> = {
   name: '', description: '', sku: '', barcode: '', category: '', subcategory: '',
@@ -41,8 +42,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default function Products() {
-  const [products, setProducts] = useState(getProducts);
-  const [suppliers] = useState(getSuppliers);
+  const { products, suppliers, setProducts } = useData();
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('');
   const [editing, setEditing] = useState<Product | null>(null);
@@ -55,35 +55,23 @@ export default function Products() {
     const q = search.toLowerCase();
     const matches = !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
       || p.barcode.includes(q) || p.aliases.toLowerCase().includes(q) || p.brand.toLowerCase().includes(q);
-    const cat = !filterCat || p.category === filterCat;
-    return matches && cat;
+    return matches && (!filterCat || p.category === filterCat);
   });
 
-  function openNew() {
-    setForm(EMPTY); setIsNew(true); setEditing(null);
-  }
-  function openEdit(p: Product) {
-    const { id, createdAt, ...rest } = p;
-    setForm(rest); setEditing(p); setIsNew(false);
-  }
+  function openNew() { setForm(EMPTY); setIsNew(true); setEditing(null); }
+  function openEdit(p: Product) { const { id, createdAt, ...rest } = p; setForm(rest); setEditing(p); setIsNew(false); }
   function save() {
-    let updated: Product[];
     if (isNew) {
-      updated = [...products, { ...form, id: uid(), createdAt: new Date().toISOString() }];
+      setProducts([...products, { ...form, id: uid(), createdAt: new Date().toISOString() }]);
     } else if (editing) {
-      updated = products.map(p => p.id === editing.id ? { ...editing, ...form } : p);
-    } else return;
-    setProducts(updated);
-    saveProducts(updated);
+      setProducts(products.map(p => p.id === editing.id ? { ...editing, ...form } : p));
+    }
     setEditing(null); setIsNew(false);
   }
   function toggleActive(id: string) {
-    const updated = products.map(p => p.id === id ? { ...p, active: !p.active } : p);
-    setProducts(updated); saveProducts(updated);
+    setProducts(products.map(p => p.id === id ? { ...p, active: !p.active } : p));
   }
-  function f(k: keyof typeof form, v: string | number | boolean) {
-    setForm(prev => ({ ...prev, [k]: v }));
-  }
+  function f(k: keyof typeof form, v: string | number | boolean) { setForm(prev => ({ ...prev, [k]: v })); }
 
   return (
     <div>
@@ -97,7 +85,6 @@ export default function Products() {
         </button>
       </div>
 
-      {/* Filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
         <div style={{ position: 'relative', flex: 1, maxWidth: 340 }}>
           <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted-foreground)' }} />
@@ -109,7 +96,6 @@ export default function Products() {
         </select>
       </div>
 
-      {/* Table */}
       <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
@@ -121,7 +107,7 @@ export default function Products() {
           </thead>
           <tbody>
             {filtered.map((p, i) => (
-              <tr key={p.id} style={{ borderBottom: i < filtered.length - 1 ? '1px solid var(--border)' : 'none', transition: 'background 0.1s' }}
+              <tr key={p.id} style={{ borderBottom: i < filtered.length - 1 ? '1px solid var(--border)' : 'none' }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'var(--secondary)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                 <td style={{ padding: '10px 14px' }}>
@@ -131,12 +117,11 @@ export default function Products() {
                 <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono-face)', fontSize: 12, color: 'var(--muted-foreground)' }}>{p.sku}</td>
                 <td style={{ padding: '10px 14px', fontSize: 12 }}>{p.category}</td>
                 <td style={{ padding: '10px 14px', fontSize: 12 }}>{p.brand}</td>
-                <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono-face)', fontSize: 12 }}>{fmt(p.costPrice)}</td>
-                <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono-face)', fontSize: 12, fontWeight: 600 }}>{fmt(p.salePrice)}</td>
+                <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono-face)', fontSize: 12 }}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(p.costPrice)}</td>
+                <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono-face)', fontSize: 12, fontWeight: 600 }}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(p.salePrice)}</td>
                 <td style={{ padding: '10px 14px' }}>
                   <span style={{ fontFamily: 'var(--font-mono-face)', fontSize: 12, color: p.qty <= p.reorderPoint ? '#ef4444' : p.qty <= p.reorderPoint * 2 ? '#f59e0b' : 'var(--foreground)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    {p.qty <= p.reorderPoint && <AlertTriangle size={11} />}
-                    {p.qty}
+                    {p.qty <= p.reorderPoint && <AlertTriangle size={11} />}{p.qty}
                   </span>
                 </td>
                 <td style={{ padding: '10px 14px' }}>
@@ -155,13 +140,14 @@ export default function Products() {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={9} style={{ padding: 32, textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 13 }}>No products found</td></tr>
+              <tr><td colSpan={9} style={{ padding: 32, textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 13 }}>
+                {products.length === 0 ? 'No products yet — add your first product or import from CSV' : 'No products match your search'}
+              </td></tr>
             )}
           </tbody>
         </table>
       </div>
 
-      {/* Product Modal */}
       {(editing || isNew) && (
         <Modal title={isNew ? 'Add Product' : `Edit: ${editing?.name}`} onClose={() => { setEditing(null); setIsNew(false); }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -173,7 +159,7 @@ export default function Products() {
             <Field label="Subcategory"><input value={form.subcategory} onChange={e => f('subcategory', e.target.value)} /></Field>
             <Field label="Brand"><input value={form.brand} onChange={e => f('brand', e.target.value)} /></Field>
             <Field label="Manufacturer"><input value={form.manufacturer} onChange={e => f('manufacturer', e.target.value)} /></Field>
-            <div style={{ gridColumn: '1 / -1' }}><Field label="Fitment (which models it fits)"><input value={form.fitment} onChange={e => f('fitment', e.target.value)} /></Field></div>
+            <div style={{ gridColumn: '1 / -1' }}><Field label="Fitment"><input value={form.fitment} onChange={e => f('fitment', e.target.value)} /></Field></div>
             <Field label="Cost Price (₦)"><input type="number" value={form.costPrice} onChange={e => f('costPrice', +e.target.value)} /></Field>
             <Field label="Sale Price (₦)"><input type="number" value={form.salePrice} onChange={e => f('salePrice', +e.target.value)} /></Field>
             <Field label="MSRP (₦)"><input type="number" value={form.msrp} onChange={e => f('msrp', +e.target.value)} /></Field>

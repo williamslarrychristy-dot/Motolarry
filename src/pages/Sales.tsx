@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { getSales, getProducts, getCustomers, fmt } from '../store';
+import { fmt } from '../store';
+import { useData } from '../DataContext';
 import { Search } from 'lucide-react';
 
 export default function Sales() {
-  const [sales] = useState(getSales);
-  const [products] = useState(getProducts);
-  const [customers] = useState(getCustomers);
+  const { sales, customers } = useData();
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -13,8 +12,7 @@ export default function Sales() {
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     .filter(s => {
       const q = search.toLowerCase();
-      if (!q) return true;
-      return s.id.includes(q) || s.items.some(i => i.name.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q));
+      return !q || s.id.includes(q) || s.items.some(i => i.name.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q));
     });
 
   const totalRevenue = filtered.reduce((a, s) => a + s.total, 0);
@@ -24,7 +22,7 @@ export default function Sales() {
     <div>
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Sale History</h1>
-        <p style={{ color: 'var(--muted-foreground)', margin: '4px 0 0', fontSize: 13 }}>{sales.length} transactions recorded — immutable</p>
+        <p style={{ color: 'var(--muted-foreground)', margin: '4px 0 0', fontSize: 13 }}>{sales.length} transactions — immutable records</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20, maxWidth: 500 }}>
@@ -61,7 +59,7 @@ export default function Sales() {
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                     <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono-face)', fontSize: 11, color: 'var(--muted-foreground)' }}>#{s.id}</td>
                     <td style={{ padding: '10px 14px', fontSize: 12 }}>{new Date(s.timestamp).toLocaleString('en-NG')}</td>
-                    <td style={{ padding: '10px 14px', fontSize: 12 }}>{s.items.length} item(s)</td>
+                    <td style={{ padding: '10px 14px', fontSize: 12 }}>{s.items.length}</td>
                     <td style={{ padding: '10px 14px', fontSize: 12 }}>{customer ? customer.name : 'Walk-in'}</td>
                     <td style={{ padding: '10px 14px', fontSize: 12, textTransform: 'capitalize' }}>{s.payment}</td>
                     <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono-face)', fontSize: 12, fontWeight: 600, color: 'var(--primary)' }}>{fmt(s.total)}</td>
@@ -71,7 +69,6 @@ export default function Sales() {
                   {expanded === s.id && (
                     <tr key={`${s.id}-exp`} style={{ background: 'var(--secondary)' }}>
                       <td colSpan={8} style={{ padding: '12px 14px' }}>
-                        <div style={{ fontSize: 12, marginBottom: 8, fontWeight: 600 }}>Sale Items</div>
                         {s.items.map((item, j) => (
                           <div key={j} style={{ display: 'flex', gap: 24, padding: '6px 0', borderBottom: j < s.items.length - 1 ? '1px solid var(--border)' : 'none', fontSize: 12 }}>
                             <span style={{ flex: 2 }}>{item.name}</span>
@@ -89,7 +86,9 @@ export default function Sales() {
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={8} style={{ padding: 32, textAlign: 'center', color: 'var(--muted-foreground)' }}>No sales found</td></tr>
+              <tr><td colSpan={8} style={{ padding: 32, textAlign: 'center', color: 'var(--muted-foreground)' }}>
+                {sales.length === 0 ? 'No sales recorded yet' : 'No results match your search'}
+              </td></tr>
             )}
           </tbody>
         </table>
