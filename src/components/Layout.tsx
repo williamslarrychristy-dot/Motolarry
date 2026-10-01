@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Package, ShoppingCart, TrendingUp, Users,
-  Truck, ArrowUpDown, Download, Settings, Menu, X, ChevronRight, Bell
+  Truck, ArrowUpDown, Download, Settings, Menu, X, ChevronRight, Bell,
+  LogIn, LogOut, User
 } from 'lucide-react';
 import { useData } from '../DataContext';
+import { supabase } from '../lib/supabase';
+import AuthModal from './AuthModal';
+import { User as SupabaseUser } from '@supabase/supabase-js';
 
 export type Page =
   | 'dashboard' | 'products' | 'pos' | 'sales' | 'stock'
@@ -30,11 +34,38 @@ interface Props {
 
 export default function Layout({ current, onNavigate, children, syncing }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const { products, settings } = useData();
   const lowStock = products.filter(p => p.active && p.qty <= p.reorderPoint).length;
 
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    setUser(null);
+  }
+
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--background)' }}>
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+      />
+
       {/* Sidebar */}
       <aside style={{
         width: sidebarOpen ? 220 : 0, minWidth: sidebarOpen ? 220 : 0,
@@ -109,11 +140,40 @@ export default function Layout({ current, onNavigate, children, syncing }: Props
               </div>
             )}
             {lowStock > 0 && (
-              <button onClick={() => onNavigate('stock')} style={{ background: 'none', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500 }}>
+              <button onClick={() => onNavigate('stock')} style={{ background: 'none', border: 'none', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
                 <Bell size={15} />{lowStock} low stock
               </button>
             )}
-            <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--primary-foreground)' }}>WL</div>
+
+            {user ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, background: 'var(--secondary)', padding: '4px 10px', borderRadius: 16 }}>
+                  <User size={13} color="var(--primary)" />
+                  <span style={{ fontWeight: 600, color: 'var(--foreground)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {user.email}
+                  </span>
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  title="Sign Out"
+                  style={{ background: 'none', border: 'none', color: 'var(--muted-foreground)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}
+                >
+                  <LogOut size={15} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setAuthModalOpen(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: 'var(--primary)', color: 'var(--primary-foreground)',
+                  border: 'none', borderRadius: 'var(--radius)', padding: '6px 12px',
+                  fontWeight: 600, fontSize: 12, cursor: 'pointer',
+                }}
+              >
+                <LogIn size={14} /> Sign In
+              </button>
+            )}
           </div>
         </header>
 
