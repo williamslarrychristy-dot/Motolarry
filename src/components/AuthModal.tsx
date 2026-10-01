@@ -35,25 +35,40 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
         setTimeout(() => {
           onSuccess?.();
           onClose();
-        }, 800);
+        }, 500);
       } else {
-        const { data, error: err } = await supabase.auth.signUp({
+        const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
           email,
           password,
         });
-        if (err) throw err;
-        if (data.session) {
-          setMessage('Account created and signed in successfully!');
-          setTimeout(() => {
-            onSuccess?.();
-            onClose();
-          }, 800);
-        } else {
-          setMessage('Sign up successful! Check your email to confirm registration or sign in.');
+
+        if (signUpErr && !signUpErr.message.includes('already registered')) {
+          throw signUpErr;
         }
+
+        // Instantly sign in directly without email confirmation
+        const { error: signInErr } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (signInErr) {
+          if (signUpData.user) {
+            setMessage('Account created successfully! Logging you in…');
+          } else {
+            throw signInErr;
+          }
+        } else {
+          setMessage('Account active and signed in successfully!');
+        }
+
+        setTimeout(() => {
+          onSuccess?.();
+          onClose();
+        }, 500);
       }
     } catch (err: any) {
-      setError(err.message || 'An authentication error occurred');
+      setError(err.message || 'Authentication failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -76,8 +91,8 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
 
         <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20, lineHeight: 1.5 }}>
           {mode === 'signin'
-            ? 'Authenticate using your account credentials to manage inventory and sales.'
-            : 'Register a new operator account for this store terminal.'}
+            ? 'Authenticate using your credentials to enter the Motolarry terminal.'
+            : 'Register a new operator account for instant terminal access.'}
         </p>
 
         {error && (
