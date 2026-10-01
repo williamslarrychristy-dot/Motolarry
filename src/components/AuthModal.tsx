@@ -61,22 +61,22 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', width: '100%', maxWidth: 400, padding: 24, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)' }}>
+      <div style={{ background: '#ffffff', color: '#0f172a', border: '1px solid #e2e8f0', borderRadius: 12, width: '100%', maxWidth: 400, padding: 28, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {mode === 'signin' ? <LogIn size={20} color="var(--primary)" /> : <UserPlus size={20} color="var(--primary)" />}
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
-              {mode === 'signin' ? 'Sign In to Supabase' : 'Create Account'}
+            {mode === 'signin' ? <LogIn size={20} color="#2563eb" /> : <UserPlus size={20} color="#2563eb" />}
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
+              {mode === 'signin' ? 'Sign In' : 'Create Account'}
             </h2>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted-foreground)', cursor: 'pointer' }}>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}>
             <X size={18} />
           </button>
         </div>
 
-        <p style={{ fontSize: 12, color: 'var(--muted-foreground)', marginBottom: 20, lineHeight: 1.5 }}>
+        <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20, lineHeight: 1.5 }}>
           {mode === 'signin'
-            ? 'Authenticate using your Supabase credentials to manage inventory and sales.'
+            ? 'Authenticate using your account credentials to manage inventory and sales.'
             : 'Register a new operator account for this store terminal.'}
         </p>
 
@@ -96,7 +96,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Email Address</label>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Email Address</label>
             <input
               type="email"
               required
@@ -108,7 +108,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
           </div>
 
           <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Password</label>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Password</label>
             <input
               type="password"
               required
@@ -124,9 +124,9 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
             type="submit"
             disabled={loading}
             style={{
-              background: 'var(--primary)', color: 'var(--primary-foreground)',
-              border: 'none', borderRadius: 'var(--radius)', padding: '10px 16px',
-              fontWeight: 600, fontSize: 13, cursor: loading ? 'not-allowed' : 'pointer',
+              background: '#2563eb', color: '#ffffff',
+              border: 'none', borderRadius: 8, padding: '10px 16px',
+              fontWeight: 600, fontSize: 14, cursor: loading ? 'not-allowed' : 'pointer',
               marginTop: 6, opacity: loading ? 0.7 : 1,
             }}
           >
@@ -134,14 +134,14 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
           </button>
         </form>
 
-        <div style={{ marginTop: 20, textAlign: 'center', fontSize: 12, color: 'var(--muted-foreground)' }}>
+        <div style={{ marginTop: 20, textAlign: 'center', fontSize: 12, color: '#64748b' }}>
           {mode === 'signin' ? (
             <>
               Need an account?{' '}
               <button
                 type="button"
                 onClick={() => { setMode('signup'); setError(null); setMessage(null); }}
-                style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                style={{ background: 'none', border: 'none', color: '#2563eb', fontWeight: 600, cursor: 'pointer', padding: 0 }}
               >
                 Sign Up
               </button>
@@ -152,7 +152,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
               <button
                 type="button"
                 onClick={() => { setMode('signin'); setError(null); setMessage(null); }}
-                style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                style={{ background: 'none', border: 'none', color: '#2563eb', fontWeight: 600, cursor: 'pointer', padding: 0 }}
               >
                 Sign In
               </button>

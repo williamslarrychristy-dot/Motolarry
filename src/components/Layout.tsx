@@ -74,8 +74,8 @@ export default function Layout({ current, onNavigate, children, syncing }: Props
         transition: 'width 0.2s, min-width 0.2s', overflow: 'hidden',
       }}>
         <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)', letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>WL Moto Parts</div>
-          <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginTop: 2, whiteSpace: 'nowrap' }}>Inventory Manager</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)', letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Motolarry</div>
+          <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginTop: 2, whiteSpace: 'nowrap' }}>Inventory & POS</div>
         </div>
 
         <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
@@ -90,9 +90,9 @@ export default function Layout({ current, onNavigate, children, syncing }: Props
                   <button key={item.id} onClick={() => onNavigate(item.id)} style={{
                     display: 'flex', alignItems: 'center', gap: 10, width: '100%',
                     padding: '8px 16px', textAlign: 'left',
-                    background: current === item.id ? 'rgba(249,115,22,0.12)' : 'transparent',
+                    background: current === item.id ? 'rgba(37,99,235,0.1)' : 'transparent',
                     color: current === item.id ? 'var(--primary)' : 'var(--secondary-foreground)',
-                    borderLeft: current === item.id ? '2px solid var(--primary)' : '2px solid transparent',
+                    borderLeft: current === item.id ? '3px solid var(--primary)' : '3px solid transparent',
                     fontWeight: current === item.id ? 600 : 400, fontSize: 13, whiteSpace: 'nowrap',
                   }}>
                     {item.icon}
@@ -108,10 +108,10 @@ export default function Layout({ current, onNavigate, children, syncing }: Props
         </nav>
 
         <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--muted-foreground)' }}>
-          <div style={{ fontWeight: 600, color: 'var(--foreground)', fontSize: 12 }}>{settings.storeName}</div>
+          <div style={{ fontWeight: 600, color: 'var(--foreground)', fontSize: 12 }}>{settings.storeName || 'Motolarry Parts'}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', display: 'inline-block', flexShrink: 0 }} />
-            Supabase connected
+            Cloud Database Connected
           </div>
         </div>
       </aside>
@@ -123,7 +123,7 @@ export default function Layout({ current, onNavigate, children, syncing }: Props
             {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted-foreground)' }}>
-            <span>WL Moto Parts</span>
+            <span>Motolarry</span>
             <ChevronRight size={12} />
             <span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{NAV.find(n => n.id === current)?.label}</span>
           </div>
@@ -131,12 +131,12 @@ export default function Layout({ current, onNavigate, children, syncing }: Props
             {syncing ? (
               <div style={{ fontSize: 11, color: 'var(--muted-foreground)', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
-                Loading from Supabase…
+                Syncing…
               </div>
             ) : (
               <div style={{ fontSize: 11, color: '#22c55e', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
-                Cloud synced
+                Realtime Synced
               </div>
             )}
             {lowStock > 0 && (

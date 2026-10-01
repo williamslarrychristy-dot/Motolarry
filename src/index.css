@@ -26,22 +26,22 @@
 }
 
 :root {
-  --background: #0a0c0f;
-  --foreground: #e8eaed;
-  --card: #111418;
-  --card-foreground: #e8eaed;
-  --primary: #f97316;
-  --primary-foreground: #0a0c0f;
-  --secondary: #1a1e24;
-  --secondary-foreground: #9ca3af;
-  --muted: #1a1e24;
-  --muted-foreground: #6b7280;
-  --accent: #f97316;
-  --accent-foreground: #0a0c0f;
-  --border: #1f2937;
-  --ring: #f97316;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #475569;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #2563eb;
+  --accent-foreground: #ffffff;
+  --border: #e2e8f0;
+  --ring: #2563eb;
   --destructive: #ef4444;
-  --radius: 6px;
+  --radius: 8px;
   --font-body: 'Inter', system-ui, sans-serif;
   --font-mono-face: 'DM Mono', monospace;
 }
@@ -66,7 +66,7 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
 
 input, textarea, select {
-  background: var(--secondary);
+  background: var(--card);
   color: var(--foreground);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -74,10 +74,11 @@ input, textarea, select {
   font-family: var(--font-body);
   font-size: 14px;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 input:focus, textarea:focus, select:focus {
   border-color: var(--ring);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 input::placeholder, textarea::placeholder {
   color: var(--muted-foreground);
@@ -91,5 +92,5 @@ button {
   outline: none;
   transition: opacity 0.15s, background-color 0.15s;
 }
-button:hover { opacity: 0.9; }
-button:active { opacity: 0.8; }
+button:hover { opacity: 0.92; }
+button:active { opacity: 0.85; }

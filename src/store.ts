@@ -50,7 +50,7 @@ export type AppData = {
 // ── Default values ─────────────────────────────────────────────────────────────
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  storeName: 'Williams Larry Moto Parts',
+  storeName: 'Motolarry Moto Parts',
   currency: 'NGN',
   adminPin: '1234',
   supabaseUrl: 'https://oqzifncuhmahxjkrmdbl.supabase.co',
