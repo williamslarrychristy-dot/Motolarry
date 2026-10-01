@@ -4,7 +4,7 @@ import { fmt, uid, CartItem, Sale, Product } from '../store';
 import { useData } from '../DataContext';
 
 export default function POS() {
-  const { products, sales, movements, customers, setProducts, setSales, setMovements } = useData();
+  const { products, sales, movements, customers, setProducts, setSales, setMovements, setCustomers } = useData();
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [payment, setPayment] = useState<Sale['payment']>('cash');
@@ -30,6 +30,7 @@ export default function POS() {
       return [...prev, { product: p, qty: 1 }];
     });
   }
+
   function updateQty(id: string, delta: number) {
     setCart(prev => prev.map(c => {
       if (c.product.id !== id) return c;
@@ -38,31 +39,68 @@ export default function POS() {
       return { ...c, qty: nq };
     }));
   }
-  function remove(id: string) { setCart(prev => prev.filter(c => c.product.id !== id)); }
+
+  function remove(id: string) {
+    setCart(prev => prev.filter(c => c.product.id !== id));
+  }
 
   const subtotal = cart.reduce((a, c) => a + c.product.salePrice * c.qty, 0);
   const profit = cart.reduce((a, c) => a + (c.product.salePrice - c.product.costPrice) * c.qty, 0);
 
   function checkout() {
     if (cart.length === 0) return;
+
     const sale: Sale = {
-      id: uid(), payment, customerId: customerId || undefined, note,
-      items: cart.map(c => ({ productId: c.product.id, name: c.product.name, sku: c.product.sku, qty: c.qty, unitPrice: c.product.salePrice, costPrice: c.product.costPrice })),
-      total: subtotal, profit, timestamp: new Date().toISOString(),
+      id: uid(),
+      payment,
+      customerId: customerId || undefined,
+      note,
+      items: cart.map(c => ({
+        productId: c.product.id,
+        name: c.product.name,
+        sku: c.product.sku,
+        qty: c.qty,
+        unitPrice: c.product.salePrice,
+        costPrice: c.product.costPrice,
+      })),
+      total: subtotal,
+      profit,
+      timestamp: new Date().toISOString(),
     };
+
+    // Deduct stocks automatically
     const updatedProducts = products.map(p => {
       const item = cart.find(c => c.product.id === p.id);
       return item ? { ...p, qty: p.qty - item.qty } : p;
     });
+
+    // Record stock movements
     const newMovements = cart.map(c => ({
-      id: uid(), productId: c.product.id, type: 'sale' as const,
-      qty: -c.qty, reason: `Sale ${sale.id}`, userId: 'admin',
-      timestamp: sale.timestamp, saleId: sale.id,
+      id: uid(),
+      productId: c.product.id,
+      type: 'sale' as const,
+      qty: -c.qty,
+      reason: `POS Sale ${sale.id}`,
+      userId: 'admin',
+      timestamp: sale.timestamp,
+      saleId: sale.id,
     }));
+
+    // Update customer credit balance if paid on credit
+    if (payment === 'credit' && customerId) {
+      const updatedCustomers = customers.map(c =>
+        c.id === customerId ? { ...c, balance: c.balance + subtotal } : c
+      );
+      setCustomers(updatedCustomers);
+    }
+
     setProducts(updatedProducts);
     setSales([...sales, sale]);
     setMovements([...movements, ...newMovements]);
-    setCart([]); setNote(''); setCustomerId('');
+
+    setCart([]);
+    setNote('');
+    setCustomerId('');
     setCompleted(sale);
   }
 
@@ -90,8 +128,8 @@ export default function POS() {
             <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted-foreground)' }}>Payment: <strong style={{ color: 'var(--foreground)', textTransform: 'capitalize' }}>{completed.payment}</strong></div>
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-            <button onClick={() => setCompleted(null)} style={{ background: 'var(--primary)', color: 'var(--primary-foreground)', borderRadius: 'var(--radius)', padding: '10px 24px', fontWeight: 600 }}>New Sale</button>
-            <button onClick={() => window.print()} style={{ background: 'var(--secondary)', color: 'var(--foreground)', borderRadius: 'var(--radius)', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={() => setCompleted(null)} style={{ background: 'var(--primary)', border: 'none', color: 'var(--primary-foreground)', borderRadius: 'var(--radius)', padding: '10px 24px', fontWeight: 600, cursor: 'pointer' }}>New Sale</button>
+            <button onClick={() => window.print()} style={{ background: 'var(--secondary)', border: 'none', color: 'var(--foreground)', borderRadius: 'var(--radius)', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
               <Receipt size={14} /> Print Receipt
             </button>
           </div>
@@ -152,10 +190,10 @@ export default function POS() {
                 <div style={{ fontSize: 11, color: 'var(--muted-foreground)', fontFamily: 'var(--font-mono-face)' }}>{fmt(item.product.salePrice)} × {item.qty}</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <button onClick={() => updateQty(item.product.id, -1)} style={{ background: 'var(--secondary)', borderRadius: 4, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Minus size={10} /></button>
+                <button onClick={() => updateQty(item.product.id, -1)} style={{ background: 'var(--secondary)', border: 'none', borderRadius: 4, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><Minus size={10} /></button>
                 <span style={{ width: 24, textAlign: 'center', fontSize: 13, fontFamily: 'var(--font-mono-face)' }}>{item.qty}</span>
-                <button onClick={() => updateQty(item.product.id, 1)} style={{ background: 'var(--secondary)', borderRadius: 4, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={10} /></button>
-                <button onClick={() => remove(item.product.id)} style={{ background: 'none', color: '#ef4444', marginLeft: 4, padding: 2 }}><Trash2 size={12} /></button>
+                <button onClick={() => updateQty(item.product.id, 1)} style={{ background: 'var(--secondary)', border: 'none', borderRadius: 4, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><Plus size={10} /></button>
+                <button onClick={() => remove(item.product.id)} style={{ background: 'none', border: 'none', color: '#ef4444', marginLeft: 4, padding: 2, cursor: 'pointer' }}><Trash2 size={12} /></button>
               </div>
             </div>
           ))}
@@ -172,7 +210,7 @@ export default function POS() {
             <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Payment Method</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
               {(['cash', 'transfer', 'card', 'credit'] as const).map(m => (
-                <button key={m} onClick={() => setPayment(m)} style={{ padding: '6px 10px', borderRadius: 4, fontSize: 12, fontWeight: 500, background: payment === m ? 'var(--primary)' : 'var(--secondary)', color: payment === m ? 'var(--primary-foreground)' : 'var(--foreground)', textTransform: 'capitalize' }}>{m}</button>
+                <button key={m} onClick={() => setPayment(m)} style={{ padding: '6px 10px', border: 'none', borderRadius: 4, fontSize: 12, fontWeight: 500, background: payment === m ? 'var(--primary)' : 'var(--secondary)', color: payment === m ? 'var(--primary-foreground)' : 'var(--foreground)', textTransform: 'capitalize', cursor: 'pointer' }}>{m}</button>
               ))}
             </div>
           </div>
@@ -186,7 +224,7 @@ export default function POS() {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, fontSize: 12, color: 'var(--muted-foreground)' }}>
             <span>Profit</span><span style={{ fontFamily: 'var(--font-mono-face)' }}>{fmt(profit)}</span>
           </div>
-          <button onClick={checkout} disabled={cart.length === 0} style={{ width: '100%', background: cart.length > 0 ? 'var(--primary)' : 'var(--secondary)', color: cart.length > 0 ? 'var(--primary-foreground)' : 'var(--muted-foreground)', borderRadius: 'var(--radius)', padding: '12px', fontWeight: 700, fontSize: 15 }}>
+          <button onClick={checkout} disabled={cart.length === 0} style={{ width: '100%', border: 'none', background: cart.length > 0 ? 'var(--primary)' : 'var(--secondary)', color: cart.length > 0 ? 'var(--primary-foreground)' : 'var(--muted-foreground)', borderRadius: 'var(--radius)', padding: '12px', fontWeight: 700, fontSize: 15, cursor: cart.length > 0 ? 'pointer' : 'not-allowed' }}>
             Complete Sale — {fmt(subtotal)}
           </button>
         </div>

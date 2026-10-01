@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { Plus, Search, Edit2, ToggleLeft, ToggleRight, AlertTriangle, X, Save } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Plus, Search, Edit2, ToggleLeft, ToggleRight, AlertTriangle, X, Save, Upload, Image as ImageIcon } from 'lucide-react';
 import { uid, Product } from '../store';
 import { useData } from '../DataContext';
+import { supabase } from '../lib/supabase';
 
 const EMPTY: Omit<Product, 'id' | 'createdAt'> = {
   name: '', description: '', sku: '', barcode: '', category: '', subcategory: '',
@@ -24,7 +25,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', width: '100%', maxWidth: 680 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
           <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{title}</h2>
-          <button onClick={onClose} style={{ background: 'none', color: 'var(--muted-foreground)' }}><X size={18} /></button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted-foreground)', cursor: 'pointer' }}><X size={18} /></button>
         </div>
         <div style={{ padding: 20 }}>{children}</div>
       </div>
@@ -48,6 +49,9 @@ export default function Products() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [form, setForm] = useState<Omit<Product, 'id' | 'createdAt'>>(EMPTY);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
 
@@ -58,8 +62,8 @@ export default function Products() {
     return matches && (!filterCat || p.category === filterCat);
   });
 
-  function openNew() { setForm(EMPTY); setIsNew(true); setEditing(null); }
-  function openEdit(p: Product) { const { id, createdAt, ...rest } = p; setForm(rest); setEditing(p); setIsNew(false); }
+  function openNew() { setForm(EMPTY); setIsNew(true); setEditing(null); setUploadError(null); }
+  function openEdit(p: Product) { const { id, createdAt, ...rest } = p; setForm(rest); setEditing(p); setIsNew(false); setUploadError(null); }
   function save() {
     if (isNew) {
       setProducts([...products, { ...form, id: uid(), createdAt: new Date().toISOString() }]);
@@ -73,6 +77,41 @@ export default function Products() {
   }
   function f(k: keyof typeof form, v: string | number | boolean) { setForm(prev => ({ ...prev, [k]: v })); }
 
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setUploadError(null);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+      const filePath = `product_images/${fileName}`;
+
+      const { error: uploadErr } = await supabase.storage
+        .from('products')
+        .upload(filePath, file, { cacheControl: '3600', upsert: true });
+
+      if (uploadErr) {
+        throw uploadErr;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('products')
+        .getPublicUrl(filePath);
+
+      if (publicUrlData?.publicUrl) {
+        f('imageUrl', publicUrlData.publicUrl);
+      }
+    } catch (err: any) {
+      setUploadError(err.message || 'Image upload failed. You can paste a public URL instead.');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -80,7 +119,7 @@ export default function Products() {
           <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Products</h1>
           <p style={{ color: 'var(--muted-foreground)', margin: '4px 0 0', fontSize: 13 }}>{products.filter(p => p.active).length} active SKUs</p>
         </div>
-        <button onClick={openNew} style={{ background: 'var(--primary)', color: 'var(--primary-foreground)', borderRadius: 'var(--radius)', padding: '8px 16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+        <button onClick={openNew} style={{ background: 'var(--primary)', color: 'var(--primary-foreground)', border: 'none', borderRadius: 'var(--radius)', padding: '8px 16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
           <Plus size={15} /> Add Product
         </button>
       </div>
@@ -111,8 +150,19 @@ export default function Products() {
                 onMouseEnter={e => (e.currentTarget.style.background = 'var(--secondary)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                 <td style={{ padding: '10px 14px' }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>{p.fitment}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {p.imageUrl ? (
+                      <img src={p.imageUrl} alt={p.name} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
+                    ) : (
+                      <div style={{ width: 32, height: 32, borderRadius: 4, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted-foreground)', flexShrink: 0 }}>
+                        <ImageIcon size={16} />
+                      </div>
+                    )}
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>{p.fitment}</div>
+                    </div>
+                  </div>
                 </td>
                 <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono-face)', fontSize: 12, color: 'var(--muted-foreground)' }}>{p.sku}</td>
                 <td style={{ padding: '10px 14px', fontSize: 12 }}>{p.category}</td>
@@ -129,10 +179,10 @@ export default function Products() {
                 </td>
                 <td style={{ padding: '10px 14px' }}>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <button onClick={() => openEdit(p)} style={{ background: 'var(--secondary)', borderRadius: 4, padding: '4px 8px', color: 'var(--foreground)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+                    <button onClick={() => openEdit(p)} style={{ background: 'var(--secondary)', border: 'none', borderRadius: 4, padding: '4px 8px', color: 'var(--foreground)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, cursor: 'pointer' }}>
                       <Edit2 size={11} /> Edit
                     </button>
-                    <button onClick={() => toggleActive(p.id)} style={{ background: 'none', color: 'var(--muted-foreground)', padding: '4px 6px', display: 'flex' }}>
+                    <button onClick={() => toggleActive(p.id)} style={{ background: 'none', border: 'none', color: 'var(--muted-foreground)', padding: '4px 6px', display: 'flex', cursor: 'pointer' }}>
                       {p.active ? <ToggleRight size={18} color="var(--primary)" /> : <ToggleLeft size={18} />}
                     </button>
                   </div>
@@ -175,7 +225,56 @@ export default function Products() {
             </Field>
             <div style={{ gridColumn: '1 / -1' }}><Field label="Aliases (comma-separated)"><input value={form.aliases} onChange={e => f('aliases', e.target.value)} placeholder="e.g. comp chain, cb400 chain" /></Field></div>
             <div style={{ gridColumn: '1 / -1' }}><Field label="Tags (comma-separated)"><input value={form.tags} onChange={e => f('tags', e.target.value)} placeholder="e.g. fast-moving, honda-specific" /></Field></div>
-            <Field label="Image URL"><input value={form.imageUrl} onChange={e => f('imageUrl', e.target.value)} /></Field>
+
+            {/* Product Image Upload & URL */}
+            <div style={{ gridColumn: '1 / -1' }}>
+              <Field label="Product Image (Supabase Storage)">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      style={{ display: 'none' }}
+                    />
+                    <button
+                      type="button"
+                      disabled={uploading}
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{
+                        background: 'var(--secondary)', color: 'var(--foreground)',
+                        border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+                        padding: '8px 14px', fontSize: 12, fontWeight: 600,
+                        display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+                      }}
+                    >
+                      <Upload size={14} /> {uploading ? 'Uploading to Supabase…' : 'Upload Image File'}
+                    </button>
+                    <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>or enter URL below</span>
+                  </div>
+
+                  {uploadError && (
+                    <div style={{ fontSize: 11, color: '#ef4444' }}>{uploadError}</div>
+                  )}
+
+                  <input
+                    value={form.imageUrl}
+                    onChange={e => f('imageUrl', e.target.value)}
+                    placeholder="https://oqzifncuhmahxjkrmdbl.supabase.co/storage/v1/object/public/products/..."
+                    style={{ width: '100%' }}
+                  />
+
+                  {form.imageUrl && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                      <img src={form.imageUrl} alt="Preview" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border)' }} />
+                      <span style={{ fontSize: 11, color: '#22c55e' }}>✓ Image loaded</span>
+                    </div>
+                  )}
+                </div>
+              </Field>
+            </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
                 <input type="checkbox" checked={form.active} onChange={e => f('active', e.target.checked)} /> Active (visible in POS)
@@ -186,8 +285,8 @@ export default function Products() {
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-            <button onClick={() => { setEditing(null); setIsNew(false); }} style={{ background: 'var(--secondary)', color: 'var(--foreground)', borderRadius: 'var(--radius)', padding: '8px 16px' }}>Cancel</button>
-            <button onClick={save} style={{ background: 'var(--primary)', color: 'var(--primary-foreground)', borderRadius: 'var(--radius)', padding: '8px 16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={() => { setEditing(null); setIsNew(false); }} style={{ background: 'var(--secondary)', border: 'none', color: 'var(--foreground)', borderRadius: 'var(--radius)', padding: '8px 16px', cursor: 'pointer' }}>Cancel</button>
+            <button onClick={save} style={{ background: 'var(--primary)', border: 'none', color: 'var(--primary-foreground)', borderRadius: 'var(--radius)', padding: '8px 16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
               <Save size={14} /> Save Product
             </button>
           </div>
