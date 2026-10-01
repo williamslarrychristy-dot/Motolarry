@@ -1,10 +1,10 @@
--- Supabase Schema for Inventory & POS Management
--- Run this in the Supabase SQL Editor (https://supabase.com/dashboard/project/oqzifncuhmahxjkrmdbl/sql)
+-- Supabase Schema for Motolarry Inventory & POS Management
+-- Run this script in the SQL Editor at https://supabase.com/dashboard/project/oqzifncuhmahxjkrmdbl/sql
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 1. Key-Value Store Table (Flexible document backup)
+-- 1. Key-Value Store Table (Flexible JSON document backup)
 CREATE TABLE IF NOT EXISTS public.kv_store (
     key TEXT PRIMARY KEY,
     data JSONB NOT NULL,
@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS public.purchase_orders (
 -- 8. App Settings Table
 CREATE TABLE IF NOT EXISTS public.settings (
     id TEXT PRIMARY KEY DEFAULT 'default',
-    store_name TEXT DEFAULT 'Williams Larry Moto Parts',
+    store_name TEXT DEFAULT 'Motolarry Moto Parts',
     currency TEXT DEFAULT 'NGN',
     admin_pin TEXT DEFAULT '1234',
     supabase_url TEXT,
@@ -106,6 +106,12 @@ CREATE TABLE IF NOT EXISTS public.settings (
     storage_url TEXT,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_products_sku ON public.products(sku);
+CREATE INDEX IF NOT EXISTS idx_products_category ON public.products(category);
+CREATE INDEX IF NOT EXISTS idx_sales_timestamp ON public.sales(timestamp);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON public.stock_movements(product_id);
 
 -- Enable Row Level Security (RLS) & Policies
 ALTER TABLE public.kv_store ENABLE ROW LEVEL SECURITY;
@@ -117,15 +123,15 @@ ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.purchase_orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 
--- Allow public / anon read/write for demo/POS terminals
-CREATE POLICY "Public full access kv_store" ON public.kv_store FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access products" ON public.products FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access sales" ON public.sales FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access stock_movements" ON public.stock_movements FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access suppliers" ON public.suppliers FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access customers" ON public.customers FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access purchase_orders" ON public.purchase_orders FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access settings" ON public.settings FOR ALL USING (true) WITH CHECK (true);
+-- Allow full read/write for authenticated users & anon terminals
+CREATE POLICY "Access kv_store" ON public.kv_store FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Access products" ON public.products FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Access sales" ON public.sales FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Access stock_movements" ON public.stock_movements FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Access suppliers" ON public.suppliers FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Access customers" ON public.customers FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Access purchase_orders" ON public.purchase_orders FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Access settings" ON public.settings FOR ALL USING (true) WITH CHECK (true);
 
 -- Storage bucket setup for product images
 INSERT INTO storage.buckets (id, name, public)

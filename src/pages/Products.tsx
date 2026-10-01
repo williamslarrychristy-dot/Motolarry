@@ -228,7 +228,7 @@ export default function Products() {
 
             {/* Product Image Upload & URL */}
             <div style={{ gridColumn: '1 / -1' }}>
-              <Field label="Product Image (Supabase Storage)">
+              <Field label="Product Image (Cloud Storage)">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                     <input
@@ -249,7 +249,7 @@ export default function Products() {
                         display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
                       }}
                     >
-                      <Upload size={14} /> {uploading ? 'Uploading to Supabase…' : 'Upload Image File'}
+                      <Upload size={14} /> {uploading ? 'Uploading image…' : 'Upload Image File'}
                     </button>
                     <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>or enter URL below</span>
                   </div>
@@ -261,7 +261,7 @@ export default function Products() {
                   <input
                     value={form.imageUrl}
                     onChange={e => f('imageUrl', e.target.value)}
-                    placeholder="https://oqzifncuhmahxjkrmdbl.supabase.co/storage/v1/object/public/products/..."
+                    placeholder="https://domain.co/storage/v1/object/public/products/..."
                     style={{ width: '100%' }}
                   />
 
