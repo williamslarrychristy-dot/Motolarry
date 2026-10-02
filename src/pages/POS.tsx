@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle, Receipt, Split } from 'lucide-react';
 import { fmt, uid, CartItem, Sale, Product, saveSingleSale, saveSingleMovement, saveSingleProduct, saveSingleCustomer } from '../store';
 import { useData } from '../DataContext';
+import { sendStockMovementAlert } from '../lib/resend';
 
 export default function POS() {
   const { products, sales, movements, customers, setProducts, setSales, setMovements, setCustomers } = useData();
@@ -91,6 +92,17 @@ export default function POS() {
       if (item) {
         const updated = { ...p, qty: p.qty - item.qty };
         saveSingleProduct(updated).catch(() => {});
+
+        // Trigger email notification for stock subtraction
+        sendStockMovementAlert({
+          productName: p.name,
+          sku: p.sku,
+          type: 'sale',
+          qty: -item.qty,
+          newQty: updated.qty,
+          reason: `POS Sale #${sale.id.slice(-6)}`,
+        }).catch(() => {});
+
         return updated;
       }
       return p;

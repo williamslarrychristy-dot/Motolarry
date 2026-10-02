@@ -2,10 +2,11 @@ import { createContext, useContext, useState, useEffect, useCallback, ReactNode,
 import {
   AppData, Product, Sale, StockMovement, Supplier, Customer, PurchaseOrder, AppSettings,
   loadAllFromCloud, saveProducts, saveSales, saveMovements, saveSuppliers,
-  saveCustomers, savePOs, saveSettings, DEFAULT_SETTINGS,
+  saveCustomers, savePOs, saveSettings, DEFAULT_SETTINGS, saveSingleMovement,
 } from './store';
 import { supabase } from './lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { sendStockMovementAlert } from './lib/resend';
 
 interface DataContextValue extends AppData {
   loading: boolean;
@@ -16,6 +17,7 @@ interface DataContextValue extends AppData {
   setCustomers: (c: Customer[]) => void;
   setPOs: (p: PurchaseOrder[]) => void;
   setSettings: (s: AppSettings) => void;
+  addStockMovement: (m: StockMovement, productName?: string, sku?: string, newTotalQty?: number) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -91,6 +93,28 @@ export function DataProvider({ children }: { children: ReactNode }) {
     broadcastChange('movements', m);
   }
 
+  async function addStockMovement(m: StockMovement, productName?: string, sku?: string, newTotalQty?: number) {
+    const updated = [m, ...data.movements];
+    setData(d => ({ ...d, movements: updated }));
+    saveSingleMovement(m).catch(() => {});
+    broadcastChange('movements', updated);
+
+    // Send email alert for stock addition / subtraction
+    const targetProduct = data.products.find(p => p.id === m.productId);
+    const name = productName || targetProduct?.name || 'Item';
+    const itemSku = sku || targetProduct?.sku || 'SKU';
+    const currentQty = newTotalQty ?? targetProduct?.qty ?? 0;
+
+    sendStockMovementAlert({
+      productName: name,
+      sku: itemSku,
+      type: m.type,
+      qty: m.qty,
+      newQty: currentQty,
+      reason: m.reason,
+    }).catch(() => {});
+  }
+
   function setSuppliers(s: Supplier[]) {
     setData(d => ({ ...d, suppliers: s }));
     saveSuppliers(s).catch(() => {});
@@ -116,7 +140,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <Ctx.Provider value={{ ...data, loading, setProducts, setSales, setMovements, setSuppliers, setCustomers, setPOs, setSettings, refresh: load }}>
+    <Ctx.Provider value={{
+      ...data,
+      loading,
+      setProducts,
+      setSales,
+      setMovements,
+      addStockMovement,
+      setSuppliers,
+      setCustomers,
+      setPOs,
+      setSettings,
+      refresh: load,
+    }}>
       {children}
     </Ctx.Provider>
   );

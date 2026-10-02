@@ -32,7 +32,7 @@ interface Props {
   syncing?: boolean;
 }
 
-export default function Layout({ current, onNavigate, children, syncing }: Props) {
+export default function Layout({ current, onNavigate, children }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -109,10 +109,6 @@ export default function Layout({ current, onNavigate, children, syncing }: Props
 
         <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--muted-foreground)' }}>
           <div style={{ fontWeight: 600, color: 'var(--foreground)', fontSize: 12 }}>{settings.storeName || 'Motolarry Parts'}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', display: 'inline-block', flexShrink: 0 }} />
-            Cloud Database Connected
-          </div>
         </div>
       </aside>
 
@@ -128,17 +124,6 @@ export default function Layout({ current, onNavigate, children, syncing }: Props
             <span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{NAV.find(n => n.id === current)?.label}</span>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
-            {syncing ? (
-              <div style={{ fontSize: 11, color: 'var(--muted-foreground)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
-                Syncing…
-              </div>
-            ) : (
-              <div style={{ fontSize: 11, color: '#22c55e', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
-                Realtime Synced
-              </div>
-            )}
             {lowStock > 0 && (
               <button onClick={() => onNavigate('stock')} style={{ background: 'none', border: 'none', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
                 <Bell size={15} />{lowStock} low stock

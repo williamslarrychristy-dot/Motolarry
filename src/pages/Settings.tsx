@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import { AppSettings } from '../store';
 import { useData } from '../DataContext';
-import { Save, Eye, EyeOff, Database, Shield } from 'lucide-react';
+import { Save, Eye, EyeOff, Shield } from 'lucide-react';
 
 export default function Settings() {
   const { settings, setSettings } = useData();
   const [form, setForm] = useState<AppSettings>(settings);
   const [saved, setSaved] = useState(false);
   const [showPin, setShowPin] = useState(false);
-  const [showKey, setShowKey] = useState(false);
 
   function save() {
     setSettings(form);
@@ -42,7 +41,7 @@ export default function Settings() {
         </div>
       </section>
 
-      <section style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 24, marginBottom: 16 }}>
+      <section style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 24, marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
           <Shield size={15} color="var(--primary)" />
           <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>Admin Security</h3>
@@ -56,29 +55,6 @@ export default function Settings() {
             </button>
           </div>
           <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--muted-foreground)' }}>Required for manual stock adjustments and sensitive actions.</p>
-        </div>
-      </section>
-
-      <section style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 24, marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-          <Database size={15} color="var(--primary)" />
-          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>Database Info</h3>
-        </div>
-        <p style={{ margin: '0 0 14px', fontSize: 12, color: 'var(--muted-foreground)', lineHeight: 1.6 }}>
-          Your app is connected to Supabase. All data is stored in the cloud. The connection info below is for reference — it comes from your connected project.
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Supabase Project URL (optional override)</label>
-            <input value={form.supabaseUrl} onChange={e => f('supabaseUrl', e.target.value)} placeholder="https://xxxxxxxxxxxx.supabase.co" style={{ width: '100%' }} />
-          </div>
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Storage Bucket URL (for product images)</label>
-            <input value={form.storageUrl} onChange={e => f('storageUrl', e.target.value)} placeholder="https://xxxxxxxxxxxx.supabase.co/storage/v1/object/public/products" style={{ width: '100%' }} />
-          </div>
-        </div>
-        <div style={{ marginTop: 14, padding: '10px 14px', background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 6, fontSize: 12, color: '#22c55e' }}>
-          ✓ Connected to Supabase — all data is persisted to the cloud
         </div>
       </section>
 
