@@ -30,7 +30,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function Dashboard() {
-  const { products, sales, customers } = useData();
+  const { products, sales } = useData();
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const todaySales = sales.filter(s => new Date(s.timestamp) >= today);
@@ -92,11 +92,11 @@ export default function Dashboard() {
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16 }}>Revenue & Profit — Last 7 Days</div>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={dailyData} barGap={4}>
-              <XAxis dataKey="day" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `₦${(v / 1000).toFixed(0)}k`} />
+              <XAxis dataKey="day" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `₦${(v / 1000).toFixed(0)}k`} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="revenue" name="Revenue" fill="rgba(249,115,22,0.8)" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="profit" name="Profit" fill="rgba(249,115,22,0.3)" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="revenue" name="Revenue" fill="rgba(37,99,235,0.85)" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="profit" name="Profit" fill="rgba(37,99,235,0.35)" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

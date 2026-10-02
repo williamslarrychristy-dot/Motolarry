@@ -6,7 +6,7 @@ import { AlertTriangle } from 'lucide-react';
 const REASONS = ['Physical count correction', 'Damaged item', 'Theft/loss', 'Supplier return', 'Manual restock', 'Other'];
 
 export default function Stock() {
-  const { products, movements, settings, setProducts, setMovements } = useData();
+  const { products, movements, settings, setProducts, addStockMovement } = useData();
   const [tab, setTab] = useState<'overview' | 'movements' | 'adjust'>('overview');
   const [adjustProduct, setAdjustProduct] = useState('');
   const [adjustQty, setAdjustQty] = useState(0);
@@ -17,7 +17,7 @@ export default function Stock() {
 
   const lowStock = products.filter(p => p.active && p.qty <= p.reorderPoint);
 
-  function applyAdjustment() {
+  async function applyAdjustment() {
     if (pin !== settings.adminPin) { setPinError('Incorrect admin PIN'); return; }
     if (!adjustProduct) return;
     const product = products.find(p => p.id === adjustProduct);
@@ -29,7 +29,7 @@ export default function Stock() {
       userId: 'admin', timestamp: new Date().toISOString(),
     };
     setProducts(products.map(p => p.id === adjustProduct ? { ...p, qty: newQty } : p));
-    setMovements([...movements, mv]);
+    await addStockMovement(mv, product.name, product.sku, newQty);
     setAdjustQty(0); setAdjustReason(REASONS[0]); setAdjustNote(''); setPin(''); setPinError('');
     setTab('movements');
   }

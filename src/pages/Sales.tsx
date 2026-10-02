@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { fmt } from '../store';
 import { useData } from '../DataContext';
-import { Search } from 'lucide-react';
+import { Search, Mail, CheckCircle2 } from 'lucide-react';
+import { sendEODSalesReportEmail } from '../lib/resend';
 
 export default function Sales() {
   const { sales, customers } = useData();
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   const filtered = [...sales]
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
@@ -18,11 +21,50 @@ export default function Sales() {
   const totalRevenue = filtered.reduce((a, s) => a + s.total, 0);
   const totalProfit = filtered.reduce((a, s) => a + s.profit, 0);
 
+  async function sendEodReport() {
+    setEmailSending(true);
+    setEmailSent(false);
+
+    const todayStr = new Date().toDateString();
+    const todaySales = sales.filter(s => new Date(s.timestamp).toDateString() === todayStr);
+    const dayRev = todaySales.reduce((a, s) => a + s.total, 0);
+    const dayProf = todaySales.reduce((a, s) => a + s.profit, 0);
+
+    const ok = await sendEODSalesReportEmail(todaySales, dayRev, dayProf);
+    setEmailSending(false);
+    if (ok) {
+      setEmailSent(true);
+      setTimeout(() => setEmailSent(false), 5000);
+    }
+  }
+
   return (
     <div>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Sale History</h1>
-        <p style={{ color: 'var(--muted-foreground)', margin: '4px 0 0', fontSize: 13 }}>{sales.length} transactions — immutable records</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Sale History</h1>
+          <p style={{ color: 'var(--muted-foreground)', margin: '4px 0 0', fontSize: 13 }}>{sales.length} transactions — immutable records</p>
+        </div>
+        <button
+          onClick={sendEodReport}
+          disabled={emailSending}
+          style={{
+            background: emailSent ? '#22c55e' : 'var(--primary)',
+            color: 'var(--primary-foreground)',
+            border: 'none',
+            borderRadius: 'var(--radius)',
+            padding: '9px 16px',
+            fontSize: 13,
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            cursor: emailSending ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {emailSent ? <CheckCircle2 size={15} /> : <Mail size={15} />}
+          {emailSending ? 'Sending Report…' : emailSent ? 'Report Emailed to Admin!' : 'Send End-of-Day Sales Report'}
+        </button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20, maxWidth: 500 }}>

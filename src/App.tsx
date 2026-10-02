@@ -11,7 +11,7 @@ import Suppliers from './pages/Suppliers';
 import ImportExport from './pages/ImportExport';
 import Settings from './pages/Settings';
 import AuthModal from './components/AuthModal';
-import { supabase } from './lib/supabase';
+import { supabase, ensureTablesExist } from './lib/supabase';
 import { User } from '@supabase/supabase-js';
 import { Shield, Lock } from 'lucide-react';
 
@@ -23,6 +23,8 @@ function AppShell() {
   const { loading } = useData();
 
   useEffect(() => {
+    ensureTablesExist().catch(() => {});
+
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user);
       setAuthChecked(true);

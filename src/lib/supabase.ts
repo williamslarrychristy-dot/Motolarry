@@ -24,3 +24,16 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
     },
   },
 });
+
+export async function ensureTablesExist(): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('products').select('id').limit(1);
+    if (error && error.message.includes('does not exist')) {
+      console.warn('Database tables initialized or pending schema execution.');
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}

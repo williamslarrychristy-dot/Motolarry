@@ -23,9 +23,16 @@ export type StockMovement = {
 export type CartItem = { product: Product; qty: number };
 export type SaleItem = { productId: string; name: string; sku: string; qty: number; unitPrice: number; costPrice: number };
 
+export type PaymentBreakdown = {
+  method: 'cash' | 'transfer' | 'card' | 'credit';
+  amount: number;
+};
+
 export type Sale = {
   id: string; items: SaleItem[]; total: number; profit: number;
-  payment: 'cash' | 'transfer' | 'card' | 'credit'; customerId?: string;
+  payment: 'cash' | 'transfer' | 'card' | 'credit';
+  payments?: PaymentBreakdown[];
+  customerId?: string;
   employeeId?: string; timestamp: string; note: string;
 };
 
@@ -65,24 +72,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   storageUrl: '',
 };
 
-// ── Local Storage Helpers ─────────────────────────────────────────────────────
-
-function getLocal<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function setLocal<T>(key: string, data: T): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-  } catch {}
-}
-
-// ── Mapping Functions for Relational Database ─────────────────────────────────
+// ── Relational Database Mapping ────────────────────────────────────────────────
 
 function mapDbProduct(row: any): Product {
   return {
@@ -149,6 +139,7 @@ function mapDbSale(row: any): Sale {
     total: Number(row.total || 0),
     profit: Number(row.profit || 0),
     payment: row.payment || 'cash',
+    payments: typeof row.payments === 'string' ? JSON.parse(row.payments) : row.payments,
     customerId: row.customer_id || row.customerId,
     employeeId: row.employee_id || row.employeeId,
     note: row.note || '',
@@ -163,6 +154,7 @@ function mapSaleToDb(s: Sale) {
     total: s.total,
     profit: s.profit,
     payment: s.payment,
+    payments: s.payments,
     customer_id: s.customerId || null,
     employee_id: s.employeeId || null,
     note: s.note,
@@ -196,114 +188,164 @@ function mapMovementToDb(m: StockMovement) {
   };
 }
 
-// ── Supabase Entity Loaders & Persisters ─────────────────────────────────────
+function mapDbCustomer(row: any): Customer {
+  return {
+    id: row.id,
+    name: row.name || '',
+    phone: row.phone || '',
+    motorcycle: row.motorcycle || '',
+    balance: Number(row.balance || 0),
+    createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+  };
+}
+
+function mapCustomerToDb(c: Customer) {
+  return {
+    id: c.id,
+    name: c.name,
+    phone: c.phone,
+    motorcycle: c.motorcycle,
+    balance: c.balance,
+    created_at: c.createdAt,
+  };
+}
+
+// ── Direct Supabase Single Entity Mutations ────────────────────────────────────
+
+export async function saveSingleProduct(p: Product): Promise<void> {
+  try {
+    await supabase.from('products').upsert(mapProductToDb(p), { onConflict: 'id' });
+  } catch {}
+}
+
+export async function saveSingleSale(s: Sale): Promise<void> {
+  try {
+    await supabase.from('sales').insert(mapSaleToDb(s));
+  } catch {}
+}
+
+export async function saveSingleMovement(m: StockMovement): Promise<void> {
+  try {
+    await supabase.from('stock_movements').insert(mapMovementToDb(m));
+  } catch {}
+}
+
+export async function saveSingleCustomer(c: Customer): Promise<void> {
+  try {
+    await supabase.from('customers').upsert(mapCustomerToDb(c), { onConflict: 'id' });
+  } catch {}
+}
+
+export async function saveSingleSupplier(s: Supplier): Promise<void> {
+  try {
+    await supabase.from('suppliers').upsert(s, { onConflict: 'id' });
+  } catch {}
+}
+
+export async function saveSinglePO(p: PurchaseOrder): Promise<void> {
+  try {
+    await supabase.from('purchase_orders').upsert({
+      id: p.id,
+      supplier_id: p.supplierId,
+      items: p.items,
+      status: p.status,
+      created_at: p.createdAt,
+      received_at: p.receivedAt || null,
+    }, { onConflict: 'id' });
+  } catch {}
+}
+
+// ── Bulk Loaders & Savers ──────────────────────────────────────────────────────
 
 export async function loadProducts(): Promise<Product[]> {
   try {
     const { data, error } = await supabase.from('products').select('*');
-    if (!error && data && data.length > 0) {
-      const prods = data.map(mapDbProduct);
-      setLocal('inv_products', prods);
-      return prods;
+    if (!error && data) {
+      return data.map(mapDbProduct);
     }
   } catch {}
-  return getLocal<Product[]>('inv_products', []);
+  return [];
 }
 
 export async function saveProducts(data: Product[]): Promise<void> {
-  setLocal('inv_products', data);
   try {
     const rows = data.map(mapProductToDb);
     await supabase.from('products').upsert(rows, { onConflict: 'id' });
-    await supabase.from('kv_store').upsert({ key: 'inv_products', data, updated_at: new Date().toISOString() });
   } catch {}
 }
 
 export async function loadSales(): Promise<Sale[]> {
   try {
     const { data, error } = await supabase.from('sales').select('*');
-    if (!error && data && data.length > 0) {
-      const sales = data.map(mapDbSale);
-      setLocal('inv_sales', sales);
-      return sales;
+    if (!error && data) {
+      return data.map(mapDbSale);
     }
   } catch {}
-  return getLocal<Sale[]>('inv_sales', []);
+  return [];
 }
 
 export async function saveSales(data: Sale[]): Promise<void> {
-  setLocal('inv_sales', data);
   try {
     const rows = data.map(mapSaleToDb);
     await supabase.from('sales').upsert(rows, { onConflict: 'id' });
-    await supabase.from('kv_store').upsert({ key: 'inv_sales', data, updated_at: new Date().toISOString() });
   } catch {}
 }
 
 export async function loadMovements(): Promise<StockMovement[]> {
   try {
     const { data, error } = await supabase.from('stock_movements').select('*');
-    if (!error && data && data.length > 0) {
-      const mvs = data.map(mapDbMovement);
-      setLocal('inv_movements', mvs);
-      return mvs;
+    if (!error && data) {
+      return data.map(mapDbMovement);
     }
   } catch {}
-  return getLocal<StockMovement[]>('inv_movements', []);
+  return [];
 }
 
 export async function saveMovements(data: StockMovement[]): Promise<void> {
-  setLocal('inv_movements', data);
   try {
     const rows = data.map(mapMovementToDb);
     await supabase.from('stock_movements').upsert(rows, { onConflict: 'id' });
-    await supabase.from('kv_store').upsert({ key: 'inv_movements', data, updated_at: new Date().toISOString() });
   } catch {}
 }
 
 export async function loadSuppliers(): Promise<Supplier[]> {
   try {
     const { data, error } = await supabase.from('suppliers').select('*');
-    if (!error && data && data.length > 0) {
-      setLocal('inv_suppliers', data);
+    if (!error && data) {
       return data as Supplier[];
     }
   } catch {}
-  return getLocal<Supplier[]>('inv_suppliers', []);
+  return [];
 }
 
 export async function saveSuppliers(data: Supplier[]): Promise<void> {
-  setLocal('inv_suppliers', data);
   try {
     await supabase.from('suppliers').upsert(data, { onConflict: 'id' });
-    await supabase.from('kv_store').upsert({ key: 'inv_suppliers', data, updated_at: new Date().toISOString() });
   } catch {}
 }
 
 export async function loadCustomers(): Promise<Customer[]> {
   try {
     const { data, error } = await supabase.from('customers').select('*');
-    if (!error && data && data.length > 0) {
-      setLocal('inv_customers', data);
-      return data as Customer[];
+    if (!error && data) {
+      return data.map(mapDbCustomer);
     }
   } catch {}
-  return getLocal<Customer[]>('inv_customers', []);
+  return [];
 }
 
 export async function saveCustomers(data: Customer[]): Promise<void> {
-  setLocal('inv_customers', data);
   try {
-    await supabase.from('customers').upsert(data, { onConflict: 'id' });
-    await supabase.from('kv_store').upsert({ key: 'inv_customers', data, updated_at: new Date().toISOString() });
+    const rows = data.map(mapCustomerToDb);
+    await supabase.from('customers').upsert(rows, { onConflict: 'id' });
   } catch {}
 }
 
 export async function loadPOs(): Promise<PurchaseOrder[]> {
   try {
     const { data, error } = await supabase.from('purchase_orders').select('*');
-    if (!error && data && data.length > 0) {
-      const pos = data.map((r: any) => ({
+    if (!error && data) {
+      return data.map((r: any) => ({
         id: r.id,
         supplierId: r.supplier_id || r.supplierId,
         items: typeof r.items === 'string' ? JSON.parse(r.items) : (r.items || []),
@@ -311,15 +353,12 @@ export async function loadPOs(): Promise<PurchaseOrder[]> {
         createdAt: r.created_at || r.createdAt,
         receivedAt: r.received_at || r.receivedAt,
       }));
-      setLocal('inv_pos', pos);
-      return pos;
     }
   } catch {}
-  return getLocal<PurchaseOrder[]>('inv_pos', []);
+  return [];
 }
 
 export async function savePOs(data: PurchaseOrder[]): Promise<void> {
-  setLocal('inv_pos', data);
   try {
     const rows = data.map(p => ({
       id: p.id,
@@ -330,7 +369,6 @@ export async function savePOs(data: PurchaseOrder[]): Promise<void> {
       received_at: p.receivedAt || null,
     }));
     await supabase.from('purchase_orders').upsert(rows, { onConflict: 'id' });
-    await supabase.from('kv_store').upsert({ key: 'inv_pos', data, updated_at: new Date().toISOString() });
   } catch {}
 }
 
@@ -338,7 +376,7 @@ export async function loadSettings(): Promise<AppSettings> {
   try {
     const { data, error } = await supabase.from('settings').select('*').eq('id', 'default').single();
     if (!error && data) {
-      const s: AppSettings = {
+      return {
         storeName: data.store_name || DEFAULT_SETTINGS.storeName,
         currency: data.currency || DEFAULT_SETTINGS.currency,
         adminPin: data.admin_pin || DEFAULT_SETTINGS.adminPin,
@@ -346,15 +384,12 @@ export async function loadSettings(): Promise<AppSettings> {
         supabaseKey: data.supabase_key || '',
         storageUrl: data.storage_url || '',
       };
-      setLocal('inv_settings', s);
-      return s;
     }
   } catch {}
-  return getLocal<AppSettings>('inv_settings', DEFAULT_SETTINGS);
+  return DEFAULT_SETTINGS;
 }
 
 export async function saveSettings(data: AppSettings): Promise<void> {
-  setLocal('inv_settings', data);
   try {
     await supabase.from('settings').upsert({
       id: 'default',
@@ -366,7 +401,6 @@ export async function saveSettings(data: AppSettings): Promise<void> {
       storage_url: data.storageUrl,
       updated_at: new Date().toISOString(),
     });
-    await supabase.from('kv_store').upsert({ key: 'inv_settings', data, updated_at: new Date().toISOString() });
   } catch {}
 }
 

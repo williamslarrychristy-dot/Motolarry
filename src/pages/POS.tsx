@@ -1,13 +1,19 @@
 import { useState } from 'react';
-import { Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle, Receipt } from 'lucide-react';
-import { fmt, uid, CartItem, Sale, Product } from '../store';
+import { Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle, Receipt, Split } from 'lucide-react';
+import { fmt, uid, CartItem, Sale, Product, saveSingleSale, saveSingleMovement, saveSingleProduct, saveSingleCustomer } from '../store';
 import { useData } from '../DataContext';
+import { sendStockMovementAlert } from '../lib/resend';
 
 export default function POS() {
   const { products, sales, movements, customers, setProducts, setSales, setMovements, setCustomers } = useData();
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [payment, setPayment] = useState<Sale['payment']>('cash');
+  const [isSplit, setIsSplit] = useState(false);
+  const [splitMethod1, setSplitMethod1] = useState<Sale['payment']>('cash');
+  const [splitAmount1, setSplitAmount1] = useState<number>(0);
+  const [splitMethod2, setSplitMethod2] = useState<Sale['payment']>('transfer');
+  const [splitAmount2, setSplitAmount2] = useState<number>(0);
   const [customerId, setCustomerId] = useState('');
   const [note, setNote] = useState('');
   const [completed, setCompleted] = useState<Sale | null>(null);
@@ -50,9 +56,18 @@ export default function POS() {
   function checkout() {
     if (cart.length === 0) return;
 
+    let salePayments = undefined;
+    if (isSplit) {
+      salePayments = [
+        { method: splitMethod1, amount: Number(splitAmount1) || 0 },
+        { method: splitMethod2, amount: Number(splitAmount2) || 0 },
+      ];
+    }
+
     const sale: Sale = {
       id: uid(),
-      payment,
+      payment: isSplit ? splitMethod1 : payment,
+      payments: salePayments,
       customerId: customerId || undefined,
       note,
       items: cart.map(c => ({
@@ -68,29 +83,61 @@ export default function POS() {
       timestamp: new Date().toISOString(),
     };
 
-    // Deduct stocks automatically
+    // Save sale to database
+    saveSingleSale(sale).catch(() => {});
+
+    // Deduct stocks automatically and save single product rows
     const updatedProducts = products.map(p => {
       const item = cart.find(c => c.product.id === p.id);
-      return item ? { ...p, qty: p.qty - item.qty } : p;
+      if (item) {
+        const updated = { ...p, qty: p.qty - item.qty };
+        saveSingleProduct(updated).catch(() => {});
+
+        // Trigger email notification for stock subtraction
+        sendStockMovementAlert({
+          productName: p.name,
+          sku: p.sku,
+          type: 'sale',
+          qty: -item.qty,
+          newQty: updated.qty,
+          reason: `POS Sale #${sale.id.slice(-6)}`,
+        }).catch(() => {});
+
+        return updated;
+      }
+      return p;
     });
 
     // Record stock movements
-    const newMovements = cart.map(c => ({
-      id: uid(),
-      productId: c.product.id,
-      type: 'sale' as const,
-      qty: -c.qty,
-      reason: `POS Sale ${sale.id}`,
-      userId: 'admin',
-      timestamp: sale.timestamp,
-      saleId: sale.id,
-    }));
+    const newMovements = cart.map(c => {
+      const mv = {
+        id: uid(),
+        productId: c.product.id,
+        type: 'sale' as const,
+        qty: -c.qty,
+        reason: `POS Sale ${sale.id}`,
+        userId: 'admin',
+        timestamp: sale.timestamp,
+        saleId: sale.id,
+      };
+      saveSingleMovement(mv).catch(() => {});
+      return mv;
+    });
 
     // Update customer credit balance if paid on credit
-    if (payment === 'credit' && customerId) {
-      const updatedCustomers = customers.map(c =>
-        c.id === customerId ? { ...c, balance: c.balance + subtotal } : c
-      );
+    if ((payment === 'credit' || (isSplit && (splitMethod1 === 'credit' || splitMethod2 === 'credit'))) && customerId) {
+      const creditAmt = isSplit
+        ? (splitMethod1 === 'credit' ? splitAmount1 : 0) + (splitMethod2 === 'credit' ? splitAmount2 : 0)
+        : subtotal;
+
+      const updatedCustomers = customers.map(c => {
+        if (c.id === customerId) {
+          const updated = { ...c, balance: c.balance + creditAmt };
+          saveSingleCustomer(updated).catch(() => {});
+          return updated;
+        }
+        return c;
+      });
       setCustomers(updatedCustomers);
     }
 
@@ -101,6 +148,7 @@ export default function POS() {
     setCart([]);
     setNote('');
     setCustomerId('');
+    setIsSplit(false);
     setCompleted(sale);
   }
 
@@ -125,7 +173,13 @@ export default function POS() {
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted-foreground)', marginTop: 6 }}>
               <span>Profit</span><span style={{ fontFamily: 'var(--font-mono-face)' }}>{fmt(completed.profit)}</span>
             </div>
-            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted-foreground)' }}>Payment: <strong style={{ color: 'var(--foreground)', textTransform: 'capitalize' }}>{completed.payment}</strong></div>
+            {completed.payments ? (
+              <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted-foreground)' }}>
+                Split Payment: {completed.payments.map(p => `${p.method.toUpperCase()} (${fmt(p.amount)})`).join(' + ')}
+              </div>
+            ) : (
+              <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted-foreground)' }}>Payment: <strong style={{ color: 'var(--foreground)', textTransform: 'capitalize' }}>{completed.payment}</strong></div>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
             <button onClick={() => setCompleted(null)} style={{ background: 'var(--primary)', border: 'none', color: 'var(--primary-foreground)', borderRadius: 'var(--radius)', padding: '10px 24px', fontWeight: 600, cursor: 'pointer' }}>New Sale</button>
@@ -158,7 +212,7 @@ export default function POS() {
               const inCart = cart.find(c => c.product.id === p.id);
               return (
                 <button key={p.id} onClick={() => addToCart(p)} style={{
-                  background: inCart ? 'rgba(249,115,22,0.1)' : 'var(--card)',
+                  background: inCart ? 'rgba(37,99,235,0.1)' : 'var(--card)',
                   border: `1px solid ${inCart ? 'var(--primary)' : 'var(--border)'}`,
                   borderRadius: 'var(--radius)', padding: '12px', textAlign: 'left',
                   cursor: p.qty < 1 ? 'not-allowed' : 'pointer', opacity: p.qty < 1 ? 0.4 : 1,
@@ -206,16 +260,77 @@ export default function POS() {
               {customers.map(c => <option key={c.id} value={c.id}>{c.name} — {c.motorcycle}</option>)}
             </select>
           </div>
+
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Payment Method</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-              {(['cash', 'transfer', 'card', 'credit'] as const).map(m => (
-                <button key={m} onClick={() => setPayment(m)} style={{ padding: '6px 10px', border: 'none', borderRadius: 4, fontSize: 12, fontWeight: 500, background: payment === m ? 'var(--primary)' : 'var(--secondary)', color: payment === m ? 'var(--primary-foreground)' : 'var(--foreground)', textTransform: 'capitalize', cursor: 'pointer' }}>{m}</button>
-              ))}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase' }}>Payment Method</label>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSplit(!isSplit);
+                  if (!isSplit) {
+                    setSplitAmount1(Math.round(subtotal / 2));
+                    setSplitAmount2(subtotal - Math.round(subtotal / 2));
+                  }
+                }}
+                style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+              >
+                <Split size={12} /> {isSplit ? 'Single Payment' : 'Split Payment'}
+              </button>
             </div>
+
+            {isSplit ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: 'var(--secondary)', padding: 10, borderRadius: 'var(--radius)' }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <select value={splitMethod1} onChange={e => setSplitMethod1(e.target.value as any)} style={{ flex: 1, fontSize: 12 }}>
+                    <option value="cash">Cash</option>
+                    <option value="transfer">Transfer</option>
+                    <option value="card">Card</option>
+                    <option value="credit">Credit</option>
+                  </select>
+                  <input
+                    type="number"
+                    value={splitAmount1}
+                    onChange={e => {
+                      const val = Number(e.target.value) || 0;
+                      setSplitAmount1(val);
+                      setSplitAmount2(Math.max(0, subtotal - val));
+                    }}
+                    placeholder="Amount 1"
+                    style={{ width: 110, fontSize: 12 }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <select value={splitMethod2} onChange={e => setSplitMethod2(e.target.value as any)} style={{ flex: 1, fontSize: 12 }}>
+                    <option value="transfer">Transfer</option>
+                    <option value="cash">Cash</option>
+                    <option value="card">Card</option>
+                    <option value="credit">Credit</option>
+                  </select>
+                  <input
+                    type="number"
+                    value={splitAmount2}
+                    onChange={e => {
+                      const val = Number(e.target.value) || 0;
+                      setSplitAmount2(val);
+                      setSplitAmount1(Math.max(0, subtotal - val));
+                    }}
+                    placeholder="Amount 2"
+                    style={{ width: 110, fontSize: 12 }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                {(['cash', 'transfer', 'card', 'credit'] as const).map(m => (
+                  <button key={m} onClick={() => setPayment(m)} style={{ padding: '6px 10px', border: 'none', borderRadius: 4, fontSize: 12, fontWeight: 500, background: payment === m ? 'var(--primary)' : 'var(--secondary)', color: payment === m ? 'var(--primary-foreground)' : 'var(--foreground)', textTransform: 'capitalize', cursor: 'pointer' }}>{m}</button>
+                ))}
+              </div>
+            )}
           </div>
+
           <div style={{ marginBottom: 16 }}>
-            <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional)" style={{ width: '100%' }} />
+            <input value={note} onChange={e => setNote(e.target.value)} placeholder="Customer Email / Note (optional)" style={{ width: '100%' }} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
             <span style={{ color: 'var(--muted-foreground)' }}>Subtotal</span>
