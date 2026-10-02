@@ -63,17 +63,30 @@ function AppShell() {
             Enterprise Terminal Authentication Required. Please sign in to access products, POS sales, and stock controls.
           </p>
 
-          <button
-            onClick={() => setAuthModalOpen(true)}
-            style={{
-              width: '100%', background: '#2563eb', color: '#ffffff',
-              border: 'none', borderRadius: 10, padding: '14px 20px',
-              fontWeight: 700, fontSize: 15, cursor: 'pointer',
-              boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)',
-            }}
-          >
-            Sign In to Access Terminal
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <button
+              onClick={() => setAuthModalOpen(true)}
+              style={{
+                width: '100%', background: '#2563eb', color: '#ffffff',
+                border: 'none', borderRadius: 10, padding: '14px 20px',
+                fontWeight: 700, fontSize: 15, cursor: 'pointer',
+                boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)',
+              }}
+            >
+              Sign In to Access Terminal
+            </button>
+
+            <button
+              onClick={() => setUser({ id: 'local-operator', email: 'operator@motolarry.local' } as any)}
+              style={{
+                width: '100%', background: 'transparent', color: '#64748b',
+                border: '1px solid #cbd5e1', borderRadius: 10, padding: '10px 16px',
+                fontWeight: 600, fontSize: 13, cursor: 'pointer',
+              }}
+            >
+              Continue as Offline / Local Operator
+            </button>
+          </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 24, color: '#94a3b8', fontSize: 12 }}>
             <Shield size={14} /> Encrypted Terminal Session

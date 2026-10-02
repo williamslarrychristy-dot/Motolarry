@@ -11,29 +11,35 @@ CREATE TABLE IF NOT EXISTS public.kv_store (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- 1b. Edge Function Key-Value Store
+CREATE TABLE IF NOT EXISTS public.kv_store_82d9e30e (
+    key TEXT PRIMARY KEY,
+    value JSONB NOT NULL
+);
+
 -- 2. Products Table
 CREATE TABLE IF NOT EXISTS public.products (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT,
-    sku TEXT UNIQUE NOT NULL,
-    barcode TEXT,
-    category TEXT,
-    subcategory TEXT,
-    brand TEXT,
-    manufacturer TEXT,
-    fitment TEXT,
+    sku TEXT DEFAULT '',
+    barcode TEXT DEFAULT '',
+    category TEXT DEFAULT '',
+    subcategory TEXT DEFAULT '',
+    brand TEXT DEFAULT '',
+    manufacturer TEXT DEFAULT '',
+    fitment TEXT DEFAULT '',
     cost_price NUMERIC(12,2) DEFAULT 0,
     sale_price NUMERIC(12,2) DEFAULT 0,
     msrp NUMERIC(12,2) DEFAULT 0,
     qty INT DEFAULT 0,
     reorder_point INT DEFAULT 5,
     reorder_qty INT DEFAULT 10,
-    location TEXT,
-    image_url TEXT,
-    aliases TEXT,
+    location TEXT DEFAULT '',
+    image_url TEXT DEFAULT '',
+    aliases TEXT DEFAULT '',
     active BOOLEAN DEFAULT TRUE,
-    tags TEXT,
+    tags TEXT DEFAULT '',
     serial_tracked BOOLEAN DEFAULT FALSE,
     supplier_id TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -114,8 +120,9 @@ CREATE INDEX IF NOT EXISTS idx_products_category ON public.products(category);
 CREATE INDEX IF NOT EXISTS idx_sales_timestamp ON public.sales(timestamp);
 CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON public.stock_movements(product_id);
 
--- Enable Row Level Security (RLS) & Policies
+-- Enable Row Level Security (RLS)
 ALTER TABLE public.kv_store ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.kv_store_82d9e30e ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.stock_movements ENABLE ROW LEVEL SECURITY;
@@ -124,8 +131,20 @@ ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.purchase_orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if present before recreating
+DROP POLICY IF EXISTS "Access kv_store" ON public.kv_store;
+DROP POLICY IF EXISTS "Access kv_store_82d9e30e" ON public.kv_store_82d9e30e;
+DROP POLICY IF EXISTS "Access products" ON public.products;
+DROP POLICY IF EXISTS "Access sales" ON public.sales;
+DROP POLICY IF EXISTS "Access stock_movements" ON public.stock_movements;
+DROP POLICY IF EXISTS "Access suppliers" ON public.suppliers;
+DROP POLICY IF EXISTS "Access customers" ON public.customers;
+DROP POLICY IF EXISTS "Access purchase_orders" ON public.purchase_orders;
+DROP POLICY IF EXISTS "Access settings" ON public.settings;
+
 -- Allow full read/write for authenticated users & anon terminals
 CREATE POLICY "Access kv_store" ON public.kv_store FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Access kv_store_82d9e30e" ON public.kv_store_82d9e30e FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Access products" ON public.products FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Access sales" ON public.sales FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Access stock_movements" ON public.stock_movements FOR ALL USING (true) WITH CHECK (true);
@@ -139,5 +158,6 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('products', 'products', true)
 ON CONFLICT (id) DO NOTHING;
 
+DROP POLICY IF EXISTS "Public bucket access products" ON storage.objects;
 CREATE POLICY "Public bucket access products" ON storage.objects
 FOR ALL USING (bucket_id = 'products') WITH CHECK (bucket_id = 'products');

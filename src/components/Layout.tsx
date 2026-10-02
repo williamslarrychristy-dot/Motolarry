@@ -36,7 +36,8 @@ export default function Layout({ current, onNavigate, children }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const { products, settings } = useData();
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const { products, settings, schemaMissing } = useData();
   const lowStock = products.filter(p => p.active && p.qty <= p.reorderPoint).length;
 
   useEffect(() => {
@@ -163,6 +164,23 @@ export default function Layout({ current, onNavigate, children }: Props) {
         </header>
 
         <main style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+          {schemaMissing && !bannerDismissed && (
+            <div style={{
+              background: 'rgba(234, 179, 8, 0.15)', border: '1px solid rgba(234, 179, 8, 0.4)',
+              borderRadius: 'var(--radius)', padding: '12px 16px', marginBottom: 20,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, fontSize: 13, color: '#ca8a04',
+            }}>
+              <div>
+                <strong>⚡ Supabase Schema Setup Required:</strong> Tables not detected in database. All your catalog and sales entries are saved <strong>safely in LocalStorage</strong>. Run the exact SQL script in <code>supabase/schema.sql</code> inside your Supabase SQL Editor to enable full cloud database sync across devices.
+              </div>
+              <button
+                onClick={() => setBannerDismissed(true)}
+                style={{ background: 'none', border: 'none', color: '#ca8a04', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                Dismiss ✕
+              </button>
+            </div>
+          )}
           {children}
         </main>
       </div>

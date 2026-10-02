@@ -4,12 +4,13 @@ import {
   loadAllFromCloud, saveProducts, saveSales, saveMovements, saveSuppliers,
   saveCustomers, savePOs, saveSettings, DEFAULT_SETTINGS, saveSingleMovement,
 } from './store';
-import { supabase } from './lib/supabase';
+import { supabase, ensureTablesExist } from './lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { sendStockMovementAlert } from './lib/resend';
 
 interface DataContextValue extends AppData {
   loading: boolean;
+  schemaMissing: boolean;
   setProducts: (p: Product[]) => void;
   setSales: (s: Sale[]) => void;
   setMovements: (m: StockMovement[]) => void;
@@ -25,6 +26,7 @@ const Ctx = createContext<DataContextValue | null>(null);
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
+  const [schemaMissing, setSchemaMissing] = useState(false);
   const [data, setData] = useState<AppData>({
     products: [], sales: [], movements: [], suppliers: [],
     customers: [], pos: [], settings: DEFAULT_SETTINGS,
@@ -34,6 +36,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const load = useCallback(async () => {
     setLoading(true);
+    const tablesOk = await ensureTablesExist();
+    setSchemaMissing(!tablesOk);
     const fresh = await loadAllFromCloud();
     setData(fresh);
     setLoading(false);
@@ -143,6 +147,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={{
       ...data,
       loading,
+      schemaMissing,
       setProducts,
       setSales,
       setMovements,

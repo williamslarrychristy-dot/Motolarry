@@ -10,6 +10,12 @@ export async function sendEmail({
   subject: string;
   html: string;
 }): Promise<boolean> {
+  // Client-side browser fetch to api.resend.com is blocked by CORS security policy in browsers.
+  if (typeof window !== 'undefined') {
+    console.info('[Motolarry Resend] Client browser environment detected. Skipping direct client-side Resend API call to avoid CORS preflight errors.');
+    return false;
+  }
+
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -23,11 +29,9 @@ export async function sendEmail({
         subject,
         html,
       }),
-      mode: 'cors',
     });
     return res.ok;
   } catch {
-    // Graceful fallback if client browser blocks direct cross-origin API calls
     return false;
   }
 }
