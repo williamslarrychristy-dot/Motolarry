@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Package, ShoppingCart, TrendingUp, Users,
   Truck, ArrowUpDown, Download, Settings, Menu, X, ChevronRight, Bell,
-  LogIn, LogOut, User
+  LogIn, LogOut, User, Receipt, BarChart3
 } from 'lucide-react';
 import { useData } from '../DataContext';
 import { supabase } from '../lib/supabase';
@@ -10,7 +10,7 @@ import AuthModal from './AuthModal';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
 export type Page =
-  | 'dashboard' | 'products' | 'pos' | 'sales' | 'stock'
+  | 'dashboard' | 'products' | 'pos' | 'sales' | 'expenditures' | 'reports' | 'stock'
   | 'customers' | 'suppliers' | 'import-export' | 'settings';
 
 const NAV: { id: Page; label: string; icon: React.ReactNode; group: string }[] = [
@@ -18,6 +18,8 @@ const NAV: { id: Page; label: string; icon: React.ReactNode; group: string }[] =
   { id: 'products', label: 'Products', icon: <Package size={16} />, group: 'main' },
   { id: 'pos', label: 'POS / Checkout', icon: <ShoppingCart size={16} />, group: 'main' },
   { id: 'sales', label: 'Sale History', icon: <TrendingUp size={16} />, group: 'main' },
+  { id: 'expenditures', label: 'Expenditures', icon: <Receipt size={16} />, group: 'main' },
+  { id: 'reports', label: 'Reports & Analytics', icon: <BarChart3 size={16} />, group: 'main' },
   { id: 'stock', label: 'Stock Control', icon: <ArrowUpDown size={16} />, group: 'main' },
   { id: 'customers', label: 'Customers', icon: <Users size={16} />, group: 'ops' },
   { id: 'suppliers', label: 'Suppliers', icon: <Truck size={16} />, group: 'ops' },
@@ -36,7 +38,8 @@ export default function Layout({ current, onNavigate, children }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const { products, settings } = useData();
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const { products, settings, schemaMissing } = useData();
   const lowStock = products.filter(p => p.active && p.qty <= p.reorderPoint).length;
 
   useEffect(() => {
@@ -125,7 +128,7 @@ export default function Layout({ current, onNavigate, children }: Props) {
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
             {lowStock > 0 && (
-              <button onClick={() => onNavigate('stock')} style={{ background: 'none', border: 'none', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
+              <button onClick={() => onNavigate('stock')} style={{ background: 'none', border: 'none', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, cursor: 'cursor' }}>
                 <Bell size={15} />{lowStock} low stock
               </button>
             )}
@@ -163,6 +166,23 @@ export default function Layout({ current, onNavigate, children }: Props) {
         </header>
 
         <main style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+          {schemaMissing && !bannerDismissed && (
+            <div style={{
+              background: 'rgba(234, 179, 8, 0.15)', border: '1px solid rgba(234, 179, 8, 0.4)',
+              borderRadius: 'var(--radius)', padding: '12px 16px', marginBottom: 20,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, fontSize: 13, color: '#ca8a04',
+            }}>
+              <div>
+                <strong>⚡ Supabase Schema Setup Required:</strong> Tables not detected in database. Run the exact SQL script in <code>supabase/schema.sql</code> inside your Supabase SQL Editor to initialize your cloud database and enable real-time synchronization across all devices.
+              </div>
+              <button
+                onClick={() => setBannerDismissed(true)}
+                style={{ background: 'none', border: 'none', color: '#ca8a04', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                Dismiss ✕
+              </button>
+            </div>
+          )}
           {children}
         </main>
       </div>

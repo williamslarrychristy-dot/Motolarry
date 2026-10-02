@@ -46,6 +46,11 @@ export type PurchaseOrder = {
   status: 'draft' | 'sent' | 'received'; createdAt: string; receivedAt?: string;
 };
 
+export type Expense = {
+  id: string; title: string; amount: number; category: string;
+  date: string; note: string; recordedBy?: string; createdAt: string;
+};
+
 export type AppSettings = {
   storeName: string; currency: string; adminPin: string;
   supabaseUrl: string; supabaseKey: string; storageUrl: string;
@@ -58,6 +63,7 @@ export type AppData = {
   suppliers: Supplier[];
   customers: Customer[];
   pos: PurchaseOrder[];
+  expenses: Expense[];
   settings: AppSettings;
 };
 
@@ -210,49 +216,74 @@ function mapCustomerToDb(c: Customer) {
   };
 }
 
+function mapDbExpense(row: any): Expense {
+  return {
+    id: row.id,
+    title: row.title || '',
+    amount: Number(row.amount || 0),
+    category: row.category || 'General',
+    date: row.date || new Date().toISOString().slice(0, 10),
+    note: row.note || '',
+    recordedBy: row.recorded_by || row.recordedBy || 'admin',
+    createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+  };
+}
+
+function mapExpenseToDb(e: Expense) {
+  return {
+    id: e.id,
+    title: e.title,
+    amount: e.amount,
+    category: e.category,
+    date: e.date,
+    note: e.note,
+    recorded_by: e.recordedBy || null,
+    created_at: e.createdAt,
+  };
+}
+
 // ── Direct Supabase Single Entity Mutations ────────────────────────────────────
 
 export async function saveSingleProduct(p: Product): Promise<void> {
-  try {
-    await supabase.from('products').upsert(mapProductToDb(p), { onConflict: 'id' });
-  } catch {}
+  const { error } = await supabase.from('products').upsert(mapProductToDb(p), { onConflict: 'id' });
+  if (error) console.error('Error saving product to Supabase:', error);
 }
 
 export async function saveSingleSale(s: Sale): Promise<void> {
-  try {
-    await supabase.from('sales').insert(mapSaleToDb(s));
-  } catch {}
+  const { error } = await supabase.from('sales').insert(mapSaleToDb(s));
+  if (error) console.error('Error saving sale to Supabase:', error);
 }
 
 export async function saveSingleMovement(m: StockMovement): Promise<void> {
-  try {
-    await supabase.from('stock_movements').insert(mapMovementToDb(m));
-  } catch {}
+  const { error } = await supabase.from('stock_movements').insert(mapMovementToDb(m));
+  if (error) console.error('Error saving stock movement to Supabase:', error);
 }
 
 export async function saveSingleCustomer(c: Customer): Promise<void> {
-  try {
-    await supabase.from('customers').upsert(mapCustomerToDb(c), { onConflict: 'id' });
-  } catch {}
+  const { error } = await supabase.from('customers').upsert(mapCustomerToDb(c), { onConflict: 'id' });
+  if (error) console.error('Error saving customer to Supabase:', error);
 }
 
 export async function saveSingleSupplier(s: Supplier): Promise<void> {
-  try {
-    await supabase.from('suppliers').upsert(s, { onConflict: 'id' });
-  } catch {}
+  const { error } = await supabase.from('suppliers').upsert(s, { onConflict: 'id' });
+  if (error) console.error('Error saving supplier to Supabase:', error);
 }
 
 export async function saveSinglePO(p: PurchaseOrder): Promise<void> {
-  try {
-    await supabase.from('purchase_orders').upsert({
-      id: p.id,
-      supplier_id: p.supplierId,
-      items: p.items,
-      status: p.status,
-      created_at: p.createdAt,
-      received_at: p.receivedAt || null,
-    }, { onConflict: 'id' });
-  } catch {}
+  const { error } = await supabase.from('purchase_orders').upsert({
+    id: p.id,
+    supplier_id: p.supplierId,
+    items: p.items,
+    status: p.status,
+    created_at: p.createdAt,
+    received_at: p.receivedAt || null,
+  }, { onConflict: 'id' });
+  if (error) console.error('Error saving purchase order to Supabase:', error);
+}
+
+export async function saveSingleExpense(e: Expense): Promise<void> {
+  const { error } = await supabase.from('expenses').upsert(mapExpenseToDb(e), { onConflict: 'id' });
+  if (error) console.error('Error saving expense to Supabase:', error);
 }
 
 // ── Bulk Loaders & Savers ──────────────────────────────────────────────────────
@@ -263,15 +294,21 @@ export async function loadProducts(): Promise<Product[]> {
     if (!error && data) {
       return data.map(mapDbProduct);
     }
-  } catch {}
+    if (error) console.error('Error loading products from Supabase:', error);
+  } catch (err) {
+    console.error('Exception loading products:', err);
+  }
   return [];
 }
 
 export async function saveProducts(data: Product[]): Promise<void> {
   try {
     const rows = data.map(mapProductToDb);
-    await supabase.from('products').upsert(rows, { onConflict: 'id' });
-  } catch {}
+    const { error } = await supabase.from('products').upsert(rows, { onConflict: 'id' });
+    if (error) console.error('Error bulk saving products:', error);
+  } catch (err) {
+    console.error('Exception bulk saving products:', err);
+  }
 }
 
 export async function loadSales(): Promise<Sale[]> {
@@ -372,6 +409,23 @@ export async function savePOs(data: PurchaseOrder[]): Promise<void> {
   } catch {}
 }
 
+export async function loadExpenses(): Promise<Expense[]> {
+  try {
+    const { data, error } = await supabase.from('expenses').select('*');
+    if (!error && data) {
+      return data.map(mapDbExpense);
+    }
+  } catch {}
+  return [];
+}
+
+export async function saveExpenses(data: Expense[]): Promise<void> {
+  try {
+    const rows = data.map(mapExpenseToDb);
+    await supabase.from('expenses').upsert(rows, { onConflict: 'id' });
+  } catch {}
+}
+
 export async function loadSettings(): Promise<AppSettings> {
   try {
     const { data, error } = await supabase.from('settings').select('*').eq('id', 'default').single();
@@ -405,13 +459,14 @@ export async function saveSettings(data: AppSettings): Promise<void> {
 }
 
 export async function loadAllFromCloud(): Promise<AppData> {
-  const [products, sales, movements, suppliers, customers, pos, settings] = await Promise.all([
+  const [products, sales, movements, suppliers, customers, pos, expenses, settings] = await Promise.all([
     loadProducts(),
     loadSales(),
     loadMovements(),
     loadSuppliers(),
     loadCustomers(),
     loadPOs(),
+    loadExpenses(),
     loadSettings(),
   ]);
 
@@ -422,6 +477,7 @@ export async function loadAllFromCloud(): Promise<AppData> {
     suppliers,
     customers,
     pos,
+    expenses,
     settings,
   };
 }
