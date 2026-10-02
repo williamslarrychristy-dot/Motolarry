@@ -102,7 +102,19 @@ CREATE TABLE IF NOT EXISTS public.purchase_orders (
     received_at TIMESTAMP WITH TIME ZONE
 );
 
--- 8. App Settings Table
+-- 8. Expenses Table
+CREATE TABLE IF NOT EXISTS public.expenses (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    amount NUMERIC(12,2) NOT NULL,
+    category TEXT DEFAULT 'General',
+    date DATE DEFAULT CURRENT_DATE,
+    note TEXT DEFAULT '',
+    recorded_by TEXT DEFAULT 'admin',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 9. App Settings Table
 CREATE TABLE IF NOT EXISTS public.settings (
     id TEXT PRIMARY KEY DEFAULT 'default',
     store_name TEXT DEFAULT 'Motolarry Moto Parts',
@@ -119,6 +131,7 @@ CREATE INDEX IF NOT EXISTS idx_products_sku ON public.products(sku);
 CREATE INDEX IF NOT EXISTS idx_products_category ON public.products(category);
 CREATE INDEX IF NOT EXISTS idx_sales_timestamp ON public.sales(timestamp);
 CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON public.stock_movements(product_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON public.expenses(date);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.kv_store ENABLE ROW LEVEL SECURITY;
@@ -129,6 +142,7 @@ ALTER TABLE public.stock_movements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.suppliers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.purchase_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies if present before recreating
@@ -140,6 +154,7 @@ DROP POLICY IF EXISTS "Access stock_movements" ON public.stock_movements;
 DROP POLICY IF EXISTS "Access suppliers" ON public.suppliers;
 DROP POLICY IF EXISTS "Access customers" ON public.customers;
 DROP POLICY IF EXISTS "Access purchase_orders" ON public.purchase_orders;
+DROP POLICY IF EXISTS "Access expenses" ON public.expenses;
 DROP POLICY IF EXISTS "Access settings" ON public.settings;
 
 -- Allow full read/write for authenticated users & anon terminals
@@ -151,6 +166,7 @@ CREATE POLICY "Access stock_movements" ON public.stock_movements FOR ALL USING (
 CREATE POLICY "Access suppliers" ON public.suppliers FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Access customers" ON public.customers FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Access purchase_orders" ON public.purchase_orders FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Access expenses" ON public.expenses FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Access settings" ON public.settings FOR ALL USING (true) WITH CHECK (true);
 
 -- Storage bucket setup for product images

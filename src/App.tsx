@@ -5,6 +5,8 @@ import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
 import POS from './pages/POS';
 import Sales from './pages/Sales';
+import Expenditures from './pages/Expenditures';
+import Reports from './pages/Reports';
 import Stock from './pages/Stock';
 import Customers from './pages/Customers';
 import Suppliers from './pages/Suppliers';
@@ -101,6 +103,8 @@ function AppShell() {
     products: <Products />,
     pos: <POS />,
     sales: <Sales />,
+    expenditures: <Expenditures />,
+    reports: <Reports />,
     stock: <Stock />,
     customers: <Customers />,
     suppliers: <Suppliers />,

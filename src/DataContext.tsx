@@ -1,8 +1,9 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import {
-  AppData, Product, Sale, StockMovement, Supplier, Customer, PurchaseOrder, AppSettings,
+  AppData, Product, Sale, StockMovement, Supplier, Customer, PurchaseOrder, Expense, AppSettings,
   loadAllFromCloud, saveProducts, saveSales, saveMovements, saveSuppliers,
-  saveCustomers, savePOs, saveSettings, DEFAULT_SETTINGS, saveSingleMovement,
+  saveCustomers, savePOs, saveExpenses, saveSettings, DEFAULT_SETTINGS,
+  saveSingleMovement, saveSingleExpense,
 } from './store';
 import { supabase, ensureTablesExist } from './lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
@@ -17,6 +18,8 @@ interface DataContextValue extends AppData {
   setSuppliers: (s: Supplier[]) => void;
   setCustomers: (c: Customer[]) => void;
   setPOs: (p: PurchaseOrder[]) => void;
+  setExpenses: (e: Expense[]) => void;
+  addExpense: (e: Expense) => Promise<void>;
   setSettings: (s: AppSettings) => void;
   addStockMovement: (m: StockMovement, productName?: string, sku?: string, newTotalQty?: number) => Promise<void>;
   refresh: () => Promise<void>;
@@ -29,7 +32,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [schemaMissing, setSchemaMissing] = useState(false);
   const [data, setData] = useState<AppData>({
     products: [], sales: [], movements: [], suppliers: [],
-    customers: [], pos: [], settings: DEFAULT_SETTINGS,
+    customers: [], pos: [], expenses: [], settings: DEFAULT_SETTINGS,
   });
 
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -46,7 +49,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     load();
 
-    // Setup Supabase Realtime WebSocket Broadcast Channel
+    // Setup Supabase Realtime WebSocket Broadcast Channel & Postgres Changes
     const channel = supabase.channel('inventory-realtime');
 
     channel.on('broadcast', { event: 'state_change' }, (payload) => {
@@ -137,6 +140,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
     broadcastChange('pos', p);
   }
 
+  function setExpenses(e: Expense[]) {
+    setData(d => ({ ...d, expenses: e }));
+    saveExpenses(e).catch(() => {});
+    broadcastChange('expenses', e);
+  }
+
+  async function addExpense(e: Expense) {
+    const updated = [e, ...data.expenses];
+    setData(d => ({ ...d, expenses: updated }));
+    saveSingleExpense(e).catch(() => {});
+    broadcastChange('expenses', updated);
+  }
+
   function setSettings(s: AppSettings) {
     setData(d => ({ ...d, settings: s }));
     saveSettings(s).catch(() => {});
@@ -155,6 +171,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setSuppliers,
       setCustomers,
       setPOs,
+      setExpenses,
+      addExpense,
       setSettings,
       refresh: load,
     }}>
