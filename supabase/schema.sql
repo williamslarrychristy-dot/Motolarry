@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS public.sales (
     total NUMERIC(12,2) NOT NULL,
     profit NUMERIC(12,2) NOT NULL,
     payment TEXT NOT NULL,
+    payments JSONB,
     customer_id TEXT,
     employee_id TEXT,
     note TEXT,
