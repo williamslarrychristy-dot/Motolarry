@@ -3,8 +3,9 @@ import { Bot, Send, User, Sparkles, Database, CheckCircle2, RefreshCw } from 'lu
 import { useData } from '../DataContext';
 import { Product, uid } from '../store';
 
-const GROQ_API_KEY = import.meta.env.VITE_OPENAI_COMPATIBLE_API_KEY || import.meta.env.OPENAI_COMPATIBLE_API_KEY || "";
-const GROQ_BASE_URL = import.meta.env.VITE_OPENAI_COMPATIBLE_API_BASE_URL || import.meta.env.OPENAI_COMPATIBLE_API_BASE_URL || "https://api.groq.com/openai/v1";
+const GROQ_API_KEY = import.meta.env.VITE_OPENAI_COMPATIBLE_API_KEY || "";
+const GROQ_BASE_URL = import.meta.env.VITE_OPENAI_COMPATIBLE_API_BASE_URL || "https://api.groq.com/openai/v1";
+const GROQ_MODEL = import.meta.env.VITE_OPENAI_COMPATIBLE_MODEL || "openai/gpt-oss-120b";
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -155,7 +156,7 @@ Be helpful, concise, and professional.`;
           Authorization: `Bearer ${GROQ_API_KEY}`,
         },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: GROQ_MODEL,
           messages: apiMessages,
           temperature: 0.2,
         }),
