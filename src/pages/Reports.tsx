@@ -1,13 +1,23 @@
 import { useState, useMemo } from 'react';
-import { BarChart3, TrendingUp, TrendingDown, DollarSign, Package, Calendar, Download, RefreshCw, AlertCircle, ShoppingBag } from 'lucide-react';
+import { BarChart3, TrendingUp, TrendingDown, DollarSign, Package, Calendar, Download, RefreshCw, AlertCircle, ShoppingBag, Wallet, Mail, CheckCircle2 } from 'lucide-react';
 import { useData } from '../DataContext';
 import { fmt } from '../store';
+import { sendEODSalesReportEmail } from '../lib/resend';
 
 type RangeOption = 'today' | 'week' | 'month' | 'all';
 
 export default function Reports() {
-  const { products, sales, expenses } = useData();
+  const { products, sales, expenses, customers } = useData();
   const [range, setRange] = useState<RangeOption>('week');
+
+  // Email Report state
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+
+  // Cash Reconciliation state
+  const [openingCash, setOpeningCash] = useState<number>(10000);
+  const [cashWithdrawals, setCashWithdrawals] = useState<number>(0);
+  const [actualCashInput, setActualCashInput] = useState<number>(0);
 
   const startDate = useMemo(() => {
     const d = new Date();
@@ -32,11 +42,52 @@ export default function Reports() {
   const totalExpenditures = useMemo(() => filteredExpenses.reduce((a, e) => a + e.amount, 0), [filteredExpenses]);
   const netProfit = grossProfit - totalExpenditures;
 
+  // Payment method breakdown
+  const paymentBreakdown = useMemo(() => {
+    const breakdown = { cash: 0, transfer: 0, card: 0, credit: 0 };
+    filteredSales.forEach(s => {
+      if (s.payments && s.payments.length > 0) {
+        s.payments.forEach(p => {
+          if (p.method in breakdown) breakdown[p.method as keyof typeof breakdown] += p.amount;
+        });
+      } else if (s.payment in breakdown) {
+        breakdown[s.payment as keyof typeof breakdown] += s.total;
+      }
+    });
+    return breakdown;
+  }, [filteredSales]);
+
+  // Customer Cash Payments collected
+  const customerCashPayments = useMemo(() => {
+    let sum = 0;
+    customers.forEach(c => {
+      if (c.payments) {
+        c.payments.forEach(p => {
+          if (p.paymentMethod === 'cash' && new Date(p.date) >= startDate) {
+            sum += p.amount;
+          }
+        });
+      }
+    });
+    return sum;
+  }, [customers, startDate]);
+
+  // Cash Expenses
+  const cashExpenses = useMemo(() => {
+    return filteredExpenses.reduce((a, e) => a + e.amount, 0);
+  }, [filteredExpenses]);
+
+  // Cash Reconciliation calculations
+  const expectedClosingCash = useMemo(() => {
+    return openingCash + paymentBreakdown.cash + customerCashPayments - cashExpenses - cashWithdrawals;
+  }, [openingCash, paymentBreakdown.cash, customerCashPayments, cashExpenses, cashWithdrawals]);
+
+  const cashDifference = actualCashInput - expectedClosingCash;
+
   // Product sales breakdown
   const productStats = useMemo(() => {
     const statsMap: Record<string, { id: string; name: string; sku: string; category: string; qtySold: number; revenue: number; currentStock: number; costPrice: number }> = {};
 
-    // Initialize all active products in map
     products.forEach(p => {
       statsMap[p.id] = {
         id: p.id,
@@ -50,7 +101,6 @@ export default function Reports() {
       };
     });
 
-    // Populate with sales
     filteredSales.forEach(s => {
       s.items.forEach(item => {
         if (!statsMap[item.productId]) {
@@ -77,20 +127,17 @@ export default function Reports() {
     return { moving, unmoving };
   }, [products, filteredSales]);
 
-  // Payment method breakdown
-  const paymentBreakdown = useMemo(() => {
-    const breakdown = { cash: 0, transfer: 0, card: 0, credit: 0 };
-    filteredSales.forEach(s => {
-      if (s.payments && s.payments.length > 0) {
-        s.payments.forEach(p => {
-          if (p.method in breakdown) breakdown[p.method as keyof typeof breakdown] += p.amount;
-        });
-      } else if (s.payment in breakdown) {
-        breakdown[s.payment as keyof typeof breakdown] += s.total;
-      }
-    });
-    return breakdown;
-  }, [filteredSales]);
+  async function triggerEmailReport() {
+    setEmailSending(true);
+    setEmailSent(false);
+
+    const ok = await sendEODSalesReportEmail(filteredSales, totalRevenue, grossProfit);
+    setEmailSending(false);
+    if (ok) {
+      setEmailSent(true);
+      setTimeout(() => setEmailSent(false), 5000);
+    }
+  }
 
   function exportCSV() {
     const rows = [
@@ -102,13 +149,19 @@ export default function Reports() {
       ['Net Profit', netProfit],
       ['Total Transactions', filteredSales.length],
       [],
+      ['Cash Reconciliation'],
+      ['Opening Cash', openingCash],
+      ['Cash Sales', paymentBreakdown.cash],
+      ['Customer Credit Payments', customerCashPayments],
+      ['Cash Expenses', cashExpenses],
+      ['Cash Withdrawals', cashWithdrawals],
+      ['Expected Closing Cash', expectedClosingCash],
+      ['Actual Cash Input', actualCashInput],
+      ['Cash Discrepancy', cashDifference],
+      [],
       ['Fast Moving Products'],
       ['Product Name', 'SKU', 'Units Sold', 'Revenue', 'Current Stock'],
       ...productStats.moving.map(p => [p.name, p.sku, p.qtySold, p.revenue, p.currentStock]),
-      [],
-      ['Unmoving / Dead Stock'],
-      ['Product Name', 'SKU', 'Units Sold', 'Current Stock', 'Stock Capital Tied (NGN)'],
-      ...productStats.unmoving.map(p => [p.name, p.sku, 0, p.currentStock, p.currentStock * p.costPrice]),
     ];
 
     const csvContent = 'data:text/csv;charset=utf-8,' + rows.map(e => e.join(',')).join('\n');
@@ -130,11 +183,11 @@ export default function Reports() {
             <BarChart3 size={24} color="var(--primary)" /> Comprehensive Business Analytics & Reports
           </h1>
           <p style={{ color: 'var(--muted-foreground)', margin: '4px 0 0', fontSize: 13 }}>
-            Track sales performance, net profitability, fast-moving items, and unmoving dead stock across your business terminals.
+            Track sales performance, net profitability, cash drawer reconciliation, and unmoving dead stock.
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 3 }}>
             {(['today', 'week', 'month', 'all'] as RangeOption[]).map(r => (
               <button
@@ -150,6 +203,21 @@ export default function Reports() {
               </button>
             ))}
           </div>
+
+          <button
+            onClick={triggerEmailReport}
+            disabled={emailSending}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: emailSent ? '#22c55e' : 'var(--primary)',
+              color: 'var(--primary-foreground)',
+              border: 'none', borderRadius: 'var(--radius)',
+              padding: '8px 14px', fontWeight: 600, fontSize: 12, cursor: emailSending ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {emailSent ? <CheckCircle2 size={14} /> : <Mail size={14} />}
+            {emailSending ? 'Sending Email…' : emailSent ? 'Report Emailed!' : 'Send Daily Email Report'}
+          </button>
 
           <button
             onClick={exportCSV}
@@ -210,6 +278,70 @@ export default function Reports() {
         </div>
       </div>
 
+      {/* Cash Reconciliation Section */}
+      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 20, marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <Wallet size={20} color="var(--primary)" />
+          <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>Cash Drawer Reconciliation</h3>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginBottom: 16 }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Opening Cash Float</label>
+            <input
+              type="number"
+              value={openingCash}
+              onChange={e => setOpeningCash(+e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Cash Sales</label>
+            <div style={{ fontSize: 16, fontWeight: 700, padding: '8px 0', fontFamily: 'var(--font-mono-face)' }}>{fmt(paymentBreakdown.cash)}</div>
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Customer Debt Payments</label>
+            <div style={{ fontSize: 16, fontWeight: 700, padding: '8px 0', fontFamily: 'var(--font-mono-face)' }}>{fmt(customerCashPayments)}</div>
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Cash Expenses</label>
+            <div style={{ fontSize: 16, fontWeight: 700, padding: '8px 0', color: '#ef4444', fontFamily: 'var(--font-mono-face)' }}>{fmt(cashExpenses)}</div>
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Owner Cash Withdrawals</label>
+            <input
+              type="number"
+              value={cashWithdrawals}
+              onChange={e => setCashWithdrawals(+e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, background: 'var(--secondary)', padding: 14, borderRadius: 8 }}>
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--muted-foreground)', textTransform: 'uppercase', fontWeight: 600 }}>Expected Cash in Drawer</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--primary)', fontFamily: 'var(--font-mono-face)', marginTop: 2 }}>{fmt(expectedClosingCash)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--muted-foreground)', textTransform: 'uppercase', fontWeight: 600 }}>Actual Cash Counted</div>
+            <input
+              type="number"
+              placeholder="Counted cash..."
+              value={actualCashInput}
+              onChange={e => setActualCashInput(+e.target.value)}
+              style={{ width: '100%', marginTop: 2 }}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--muted-foreground)', textTransform: 'uppercase', fontWeight: 600 }}>Discrepancy / Over-Short</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: cashDifference === 0 ? '#16a34a' : cashDifference > 0 ? '#16a34a' : '#ef4444', fontFamily: 'var(--font-mono-face)', marginTop: 2 }}>
+              {fmt(cashDifference)} {cashDifference === 0 ? '✓ Balanced' : cashDifference > 0 ? '(Over)' : '(Short)'}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Payment Methods Breakdown */}
       <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 20, marginBottom: 24 }}>
         <h3 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 14px' }}>Revenue Breakdown by Payment Method</h3>
@@ -253,7 +385,7 @@ export default function Reports() {
               <tbody>
                 {productStats.moving.length === 0 ? (
                   <tr><td colSpan={3} style={{ padding: 20, textAlign: 'center', color: 'var(--muted-foreground)' }}>No sales recorded in period</td></tr>
-                ) : productStats.moving.slice(0, 10).map((p, i) => (
+                ) : productStats.moving.slice(0, 10).map((p) => (
                   <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '8px 10px', fontWeight: 600 }}>{p.name}</td>
                     <td style={{ padding: '8px 10px', textAlign: 'center', fontFamily: 'var(--font-mono-face)', color: '#16a34a', fontWeight: 700 }}>{p.qtySold}</td>
@@ -283,7 +415,7 @@ export default function Reports() {
               <tbody>
                 {productStats.unmoving.length === 0 ? (
                   <tr><td colSpan={3} style={{ padding: 20, textAlign: 'center', color: 'var(--muted-foreground)' }}>Great! All active stocked items are moving.</td></tr>
-                ) : productStats.unmoving.slice(0, 10).map((p, i) => (
+                ) : productStats.unmoving.slice(0, 10).map((p) => (
                   <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '8px 10px', fontWeight: 600 }}>{p.name}</td>
                     <td style={{ padding: '8px 10px', textAlign: 'center', fontFamily: 'var(--font-mono-face)', color: '#ef4444', fontWeight: 700 }}>{p.currentStock}</td>

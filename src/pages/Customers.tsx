@@ -1,15 +1,20 @@
 import { useState } from 'react';
-import { uid, Customer } from '../store';
+import { uid, Customer, CustomerPayment, fmt } from '../store';
 import { useData } from '../DataContext';
-import { Plus, X, Save, User } from 'lucide-react';
+import { Plus, X, Save, User, CreditCard, Receipt, CheckCircle } from 'lucide-react';
 
-const EMPTY: Omit<Customer, 'id' | 'createdAt'> = { name: '', phone: '', motorcycle: '', balance: 0 };
+const EMPTY: Omit<Customer, 'id' | 'createdAt'> = { name: '', phone: '', motorcycle: '', balance: 0, payments: [] };
 
 export default function Customers() {
   const { customers, sales, setCustomers } = useData();
   const [selected, setSelected] = useState<Customer | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [form, setForm] = useState(EMPTY);
+
+  // Payment Recording State
+  const [payAmount, setPayAmount] = useState<number>(0);
+  const [payMethod, setPayMethod] = useState<'cash' | 'transfer' | 'card'>('cash');
+  const [payNote, setPayNote] = useState<string>('');
 
   function save() {
     if (isNew) {
@@ -19,19 +24,52 @@ export default function Customers() {
     }
     setIsNew(false); setSelected(null);
   }
-  function openEdit(c: Customer) { const { id, createdAt, ...rest } = c; setForm(rest); setSelected(c); setIsNew(false); }
+
+  function recordPayment() {
+    if (!selected || payAmount <= 0) return;
+
+    const payment: CustomerPayment = {
+      id: uid(),
+      amount: payAmount,
+      paymentMethod: payMethod,
+      date: new Date().toISOString(),
+      note: payNote,
+    };
+
+    const newBalance = Math.max(0, selected.balance - payAmount);
+    const updatedCustomer: Customer = {
+      ...selected,
+      balance: newBalance,
+      payments: [payment, ...(selected.payments || [])],
+    };
+
+    setCustomers(customers.map(c => c.id === selected.id ? updatedCustomer : c));
+    setSelected(updatedCustomer);
+    setForm(prev => ({ ...prev, balance: newBalance }));
+    setPayAmount(0);
+    setPayNote('');
+  }
+
+  function openEdit(c: Customer) {
+    const { id, createdAt, ...rest } = c;
+    setForm(rest);
+    setSelected(c);
+    setIsNew(false);
+    setPayAmount(0);
+  }
+
   function openNew() { setForm(EMPTY); setIsNew(true); setSelected(null); }
-  function f(k: keyof typeof form, v: string | number) { setForm(prev => ({ ...prev, [k]: v })); }
+  function f(k: keyof typeof form, v: any) { setForm(prev => ({ ...prev, [k]: v })); }
 
   const customerSales = (id: string) => sales.filter(s => s.customerId === id);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 20 }}>
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Customers</h1>
-            <p style={{ color: 'var(--muted-foreground)', margin: '4px 0 0', fontSize: 13 }}>{customers.length} registered</p>
+            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Customer Accounts & Debt Statements</h1>
+            <p style={{ color: 'var(--muted-foreground)', margin: '4px 0 0', fontSize: 13 }}>{customers.length} registered clients with credit statements</p>
           </div>
           <button onClick={openNew} style={{ background: 'var(--primary)', color: 'var(--primary-foreground)', borderRadius: 'var(--radius)', padding: '8px 16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
             <Plus size={14} /> Add Customer
@@ -56,9 +94,9 @@ export default function Customers() {
                   <div style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>{c.phone} · {c.motorcycle}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 12, fontFamily: 'var(--font-mono-face)', fontWeight: 600 }}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(totalSpent)}</div>
+                  <div style={{ fontSize: 12, fontFamily: 'var(--font-mono-face)', fontWeight: 600 }}>{fmt(totalSpent)}</div>
                   <div style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>{cs.length} purchases</div>
-                  {c.balance > 0 && <div style={{ fontSize: 11, color: '#ef4444', fontFamily: 'var(--font-mono-face)' }}>Owes {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(c.balance)}</div>}
+                  {c.balance > 0 && <div style={{ fontSize: 11, color: '#ef4444', fontFamily: 'var(--font-mono-face)', fontWeight: 700 }}>Owes {fmt(c.balance)}</div>}
                 </div>
               </div>
             );
@@ -69,11 +107,12 @@ export default function Customers() {
       {(isNew || selected) && (
         <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 20, height: 'fit-content' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{isNew ? 'New Customer' : 'Edit Customer'}</h3>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{isNew ? 'New Customer' : 'Customer Account Statement'}</h3>
             <button onClick={() => { setIsNew(false); setSelected(null); }} style={{ background: 'none', color: 'var(--muted-foreground)' }}><X size={16} /></button>
           </div>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {([['Name', 'name', 'text'], ['Phone', 'phone', 'tel'], ['Motorcycle', 'motorcycle', 'text'], ['Credit Balance (₦)', 'balance', 'number']] as [string, keyof typeof form, string][]).map(([label, key, type]) => (
+            {([['Name', 'name', 'text'], ['Phone', 'phone', 'tel'], ['Motorcycle', 'motorcycle', 'text'], ['Outstanding Debt Balance (₦)', 'balance', 'number']] as [string, keyof typeof form, string][]).map(([label, key, type]) => (
               <div key={key}>
                 <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>{label}</label>
                 <input type={type} value={form[key] as string} onChange={e => f(key, type === 'number' ? +e.target.value : e.target.value)} style={{ width: '100%' }} />
@@ -81,21 +120,76 @@ export default function Customers() {
             ))}
           </div>
 
-          {selected && customerSales(selected.id).length > 0 && (
+          {selected && (
             <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Recent Purchases</div>
-              {customerSales(selected.id).slice(-5).reverse().map((s) => (
-                <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '5px 0', borderBottom: '1px solid var(--border)', color: 'var(--muted-foreground)' }}>
-                  <span>{new Date(s.timestamp).toLocaleDateString('en-NG')}</span>
-                  <span>{s.items.length} item(s)</span>
-                  <span style={{ fontFamily: 'var(--font-mono-face)', color: 'var(--primary)' }}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(s.total)}</span>
+              {/* Record Debt Payment */}
+              {selected.balance > 0 && (
+                <div style={{ background: 'rgba(34,197,94,0.08)', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#16a34a', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <CreditCard size={14} /> Record Debt Payment
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <input
+                      type="number"
+                      placeholder="Payment Amount (₦)"
+                      value={payAmount || ''}
+                      onChange={e => setPayAmount(+e.target.value)}
+                      style={{ width: '100%' }}
+                    />
+                    <select value={payMethod} onChange={e => setPayMethod(e.target.value as any)} style={{ width: '100%' }}>
+                      <option value="cash">Cash Payment</option>
+                      <option value="transfer">Bank Transfer</option>
+                      <option value="card">POS Terminal</option>
+                    </select>
+                    <input
+                      placeholder="Payment Note / Receipt Ref..."
+                      value={payNote}
+                      onChange={e => setPayNote(e.target.value)}
+                      style={{ width: '100%' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={recordPayment}
+                      disabled={payAmount <= 0}
+                      style={{ background: '#16a34a', color: '#fff', padding: '8px', borderRadius: 4, fontWeight: 600, fontSize: 12, cursor: payAmount > 0 ? 'pointer' : 'not-allowed' }}
+                    >
+                      Save Payment Receipt
+                    </button>
+                  </div>
                 </div>
-              ))}
+              )}
+
+              {/* Payment History */}
+              {selected.payments && selected.payments.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Payment Receipts History</div>
+                  {selected.payments.map((p) => (
+                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '6px 0', borderBottom: '1px solid var(--border)', color: 'var(--muted-foreground)' }}>
+                      <span>{new Date(p.date).toLocaleDateString('en-NG')} ({p.paymentMethod})</span>
+                      <span style={{ fontFamily: 'var(--font-mono-face)', color: '#16a34a', fontWeight: 600 }}>-{fmt(p.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Purchase History */}
+              {customerSales(selected.id).length > 0 && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Purchase Statement</div>
+                  {customerSales(selected.id).slice(-5).reverse().map((s) => (
+                    <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '5px 0', borderBottom: '1px solid var(--border)', color: 'var(--muted-foreground)' }}>
+                      <span>{new Date(s.timestamp).toLocaleDateString('en-NG')}</span>
+                      <span>{s.items.length} item(s)</span>
+                      <span style={{ fontFamily: 'var(--font-mono-face)', color: 'var(--primary)' }}>{fmt(s.total)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           <button onClick={save} style={{ width: '100%', marginTop: 16, background: 'var(--primary)', color: 'var(--primary-foreground)', borderRadius: 'var(--radius)', padding: 10, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <Save size={13} /> Save
+            <Save size={13} /> Save Customer Details
           </button>
         </div>
       )}
