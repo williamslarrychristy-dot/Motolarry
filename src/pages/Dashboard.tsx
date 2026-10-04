@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag, Receipt, Layers } from 'lucide-react';
+import { TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag, Receipt, Layers, Coins } from 'lucide-react';
 import { fmt } from '../store';
 import { useData } from '../DataContext';
 
@@ -34,6 +34,15 @@ export default function Dashboard() {
 
   const activeProducts = products.filter(p => p.active);
   const totalStockUnits = useMemo(() => activeProducts.reduce((sum, p) => sum + (p.qty || 0), 0), [activeProducts]);
+
+  // Dynamic Stock Value calculation:
+  // If costPrice > 0, value = costPrice * qty; else value = salePrice * qty
+  const totalStockValue = useMemo(() => {
+    return activeProducts.reduce((sum, p) => {
+      const priceToUse = (p.costPrice && p.costPrice > 0) ? p.costPrice : (p.salePrice || 0);
+      return sum + (priceToUse * (p.qty || 0));
+    }, 0);
+  }, [activeProducts]);
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -104,6 +113,7 @@ export default function Dashboard() {
         <StatCard label="Week's Revenue" value={fmt(weekRevenue)} sub={`${weekSales.length} sales`} icon={<ShoppingBag size={16} />} />
         <StatCard label="Week's Net Profit" value={fmt(weekNetProfit)} sub={`Gross ${fmt(weekGrossProfit)} - Exp ${fmt(weekExpenses)}`} icon={<TrendingUp size={16} />} />
         <StatCard label="Total Stock Units" value={`${totalStockUnits.toLocaleString()} units`} sub={`${activeProducts.length} active SKUs`} icon={<Layers size={16} />} />
+        <StatCard label="Total Stock Value" value={fmt(totalStockValue)} sub="inventory valuation" icon={<Coins size={16} />} accent />
         <StatCard label="Low Stock Alerts" value={String(lowStock.length)} sub="at or below reorder" icon={<AlertTriangle size={16} />} accent={lowStock.length > 0} />
       </div>
 

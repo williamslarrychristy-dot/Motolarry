@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Package, ShoppingCart, TrendingUp, Users,
-  Truck, ArrowUpDown, Download, Settings, Menu, X, ChevronRight, Bell,
-  LogIn, LogOut, User, Receipt, BarChart3, Pin, PinOff, Wifi, WifiOff, RefreshCw
+  Truck, ArrowUpDown, Download, Settings, ChevronRight, Bell,
+  LogIn, LogOut, User, Receipt, BarChart3, Pin, PinOff, Wifi, WifiOff, RefreshCw, Bot
 } from 'lucide-react';
 import { useData } from '../DataContext';
 import { supabase } from '../lib/supabase';
@@ -10,7 +10,7 @@ import AuthModal from './AuthModal';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
 export type Page =
-  | 'dashboard' | 'products' | 'pos' | 'sales' | 'expenditures' | 'reports' | 'stock'
+  | 'dashboard' | 'products' | 'pos' | 'sales' | 'expenditures' | 'reports' | 'ai-agent' | 'stock'
   | 'customers' | 'suppliers' | 'import-export' | 'settings';
 
 const NAV: { id: Page; label: string; icon: React.ReactNode; group: string }[] = [
@@ -20,6 +20,7 @@ const NAV: { id: Page; label: string; icon: React.ReactNode; group: string }[] =
   { id: 'sales', label: 'Sale History', icon: <TrendingUp size={16} />, group: 'main' },
   { id: 'expenditures', label: 'Expenditures', icon: <Receipt size={16} />, group: 'main' },
   { id: 'reports', label: 'Reports & Analytics', icon: <BarChart3 size={16} />, group: 'main' },
+  { id: 'ai-agent', label: 'AI Agent', icon: <Bot size={16} />, group: 'main' },
   { id: 'stock', label: 'Stock Control', icon: <ArrowUpDown size={16} />, group: 'main' },
   { id: 'customers', label: 'Customers', icon: <Users size={16} />, group: 'ops' },
   { id: 'suppliers', label: 'Suppliers', icon: <Truck size={16} />, group: 'ops' },
