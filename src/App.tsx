@@ -7,6 +7,7 @@ import POS from './pages/POS';
 import Sales from './pages/Sales';
 import Expenditures from './pages/Expenditures';
 import Reports from './pages/Reports';
+import AIAgent from './pages/AIAgent';
 import Stock from './pages/Stock';
 import Customers from './pages/Customers';
 import Suppliers from './pages/Suppliers';
@@ -105,6 +106,7 @@ function AppShell() {
     sales: <Sales />,
     expenditures: <Expenditures />,
     reports: <Reports />,
+    'ai-agent': <AIAgent />,
     stock: <Stock />,
     customers: <Customers />,
     suppliers: <Suppliers />,
