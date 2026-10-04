@@ -43,6 +43,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
   });
 
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const setTimedSyncNotice = (msg: string | null) => {
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    setSyncNotice(msg);
+    if (msg) {
+      syncTimeoutRef.current = setTimeout(() => {
+        setSyncNotice(null);
+      }, 5000);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,13 +85,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const syncPending = useCallback(async () => {
     const pending = getQueuedMutations();
     if (pending.length > 0 && navigator.onLine) {
-      setSyncNotice(`🔄 Syncing ${pending.length} offline changes to cloud database...`);
+      setTimedSyncNotice('Syncing offline changes...');
       const synced = await flushOfflineMutations();
-      setSyncNotice(`✅ Successfully synced ${synced} changes to cloud!`);
-      setTimeout(() => setSyncNotice(null), 4000);
-      load();
+      if (synced > 0) {
+        setTimedSyncNotice('Sync complete. Refreshing page.');
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        setTimedSyncNotice(null);
+      }
     }
-  }, [load]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -92,7 +108,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     const handleOffline = () => {
       setIsOnline(false);
-      setSyncNotice('⚡ Offline mode active. All changes are saved locally & will sync when online.');
+      setTimedSyncNotice('Offline mode active. Changes are saved locally.');
     };
 
     window.addEventListener('online', handleOnline);
@@ -123,6 +139,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       supabase.removeChannel(channel);
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
     };
   }, [load, syncPending]);
 

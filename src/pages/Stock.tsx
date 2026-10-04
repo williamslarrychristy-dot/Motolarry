@@ -126,7 +126,7 @@ export default function Stock() {
         <p style={{ color: 'var(--muted-foreground)', margin: '4px 0 0', fontSize: 13 }}>Real-time inventory levels, stock reordering, and audit trail</p>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
         {(['overview', 'movements', 'purchases', 'adjust'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{ padding: '7px 16px', borderRadius: 'var(--radius)', fontSize: 13, fontWeight: 500, background: tab === t ? 'var(--primary)' : 'var(--secondary)', color: tab === t ? 'var(--primary-foreground)' : 'var(--foreground)', textTransform: 'capitalize' }}>
             {t === 'purchases' ? 'Purchases & Restock' : t === 'adjust' ? 'Manual Adjust (Admin)' : t.charAt(0).toUpperCase() + t.slice(1)}
@@ -141,8 +141,8 @@ export default function Stock() {
               <AlertTriangle size={14} /> {lowStock.length} products at or below reorder point
             </div>
           )}
-          <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
               <thead>
                 <tr style={{ background: 'var(--secondary)', borderBottom: '1px solid var(--border)' }}>
                   {['Product', 'SKU', 'Location', 'On Hand', 'Reorder At', 'Reorder Qty', 'Status'].map(h => (
@@ -183,7 +183,7 @@ export default function Stock() {
 
       {tab === 'purchases' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 16 }}>
             <div>
               <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Stock Purchase Orders</h2>
               <p style={{ fontSize: 12, color: 'var(--muted-foreground)', margin: '2px 0 0' }}>Order inventory from suppliers and receive shipments cleanly</p>
@@ -201,8 +201,8 @@ export default function Stock() {
             </button>
           </div>
 
-          <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+          <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13, minWidth: 600 }}>
               <thead>
                 <tr style={{ background: 'var(--secondary)', borderBottom: '1px solid var(--border)' }}>
                   <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--muted-foreground)' }}>PO ID</th>
@@ -268,7 +268,7 @@ export default function Stock() {
 
           {showPOModal && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
-              <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, width: '100%', maxWidth: 520, padding: 24 }}>
+              <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, width: '100%', maxWidth: 520, padding: 24, maxHeight: '90vh', overflowY: 'auto' }}>
                 <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 16px' }}>Create Stock Purchase Order</h2>
                 <form onSubmit={createPurchaseOrder} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   <div>
@@ -281,8 +281,8 @@ export default function Stock() {
 
                   <div style={{ background: 'var(--secondary)', padding: 12, borderRadius: 8 }}>
                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Add Products to Purchase Order</label>
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                      <select value={selectedProductToAdd} onChange={e => setSelectedProductToAdd(e.target.value)} style={{ flex: 1, padding: '8px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                      <select value={selectedProductToAdd} onChange={e => setSelectedProductToAdd(e.target.value)} style={{ flex: '1 1 200px', minWidth: 160, padding: '8px' }}>
                         <option value="">Select Product...</option>
                         {products.filter(p => p.active).map(p => <option key={p.id} value={p.id}>{p.name} (In stock: {p.qty})</option>)}
                       </select>
@@ -292,9 +292,9 @@ export default function Stock() {
                         placeholder="Order Qty"
                         value={productOrderQty}
                         onChange={e => setProductOrderQty(+e.target.value)}
-                        style={{ width: 90, padding: '8px' }}
+                        style={{ flex: '1 1 80px', minWidth: 80, padding: '8px' }}
                       />
-                      <button type="button" onClick={addProductToPO} style={{ background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4, padding: '0 12px', fontWeight: 600, cursor: 'pointer' }}>Add</button>
+                      <button type="button" onClick={addProductToPO} style={{ background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4, padding: '8px 14px', fontWeight: 600, cursor: 'pointer', flex: '0 0 auto' }}>Add</button>
                     </div>
 
                     {poItems.length > 0 && (
@@ -321,8 +321,8 @@ export default function Stock() {
       )}
 
       {tab === 'movements' && (
-        <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
             <thead>
               <tr style={{ background: 'var(--secondary)', borderBottom: '1px solid var(--border)' }}>
                 {['Timestamp', 'Product', 'Type', 'Qty Change', 'Reason', 'User'].map(h => (
@@ -353,7 +353,7 @@ export default function Stock() {
       )}
 
       {tab === 'adjust' && (
-        <div style={{ maxWidth: 480 }}>
+        <div style={{ maxWidth: 480, width: '100%' }}>
           <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 24 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>

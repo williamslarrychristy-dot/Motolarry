@@ -94,3 +94,16 @@ button {
 }
 button:hover { opacity: 0.92; }
 button:active { opacity: 0.85; }
+
+/* Mobile Viewport Optimizations (<768px) */
+@media (max-width: 768px) {
+  main {
+    padding: 12px !important;
+  }
+  header {
+    padding: 0 12px !important;
+  }
+  .stat-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+  }
+}

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Package, ShoppingCart, TrendingUp, Users,
   Truck, ArrowUpDown, Download, Settings, ChevronRight, Bell,
-  LogIn, LogOut, User, Receipt, BarChart3, Pin, PinOff, Wifi, WifiOff, RefreshCw, Bot
+  LogIn, LogOut, User, Receipt, BarChart3, Pin, PinOff, RefreshCw, Bot
 } from 'lucide-react';
 import { useData } from '../DataContext';
 import { supabase } from '../lib/supabase';
@@ -48,7 +48,7 @@ export default function Layout({ current, onNavigate, children }: Props) {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
-  const { products, settings, schemaMissing, isOnline, syncNotice } = useData();
+  const { products, settings, schemaMissing, syncNotice } = useData();
   const lowStock = products.filter(p => p.active && p.qty <= p.reorderPoint).length;
 
   const sidebarOpen = locked || hovered;
@@ -181,12 +181,6 @@ export default function Layout({ current, onNavigate, children }: Props) {
           </div>
 
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
-            {/* Connection Indicator */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: isOnline ? '#16a34a' : '#ef4444' }}>
-              {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
-              <span>{isOnline ? 'Cloud Online' : 'Offline Mode'}</span>
-            </div>
-
             {lowStock > 0 && (
               <button onClick={() => onNavigate('stock')} style={{ background: 'none', border: 'none', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
                 <Bell size={15} />{lowStock} low stock
