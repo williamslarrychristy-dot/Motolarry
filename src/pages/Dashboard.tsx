@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag, Receipt } from 'lucide-react';
+import { TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag, Receipt, Layers } from 'lucide-react';
 import { fmt } from '../store';
 import { useData } from '../DataContext';
 
@@ -32,22 +32,35 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function Dashboard() {
   const { products, sales, expenses } = useData();
 
+  const activeProducts = products.filter(p => p.active);
+  const totalStockUnits = useMemo(() => activeProducts.reduce((sum, p) => sum + (p.qty || 0), 0), [activeProducts]);
+
   const todayStr = new Date().toISOString().slice(0, 10);
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const todaySales = sales.filter(s => new Date(s.timestamp) >= today);
   const todayRevenue = todaySales.reduce((a, s) => a + s.total, 0);
-  const todayGrossProfit = todaySales.reduce((a, s) => a + s.profit, 0);
+
+  // Helper to compute sale profit with cost price fallback (if costPrice == 0, profit = total)
+  function getSaleProfit(s: any): number {
+    if (s.profit && s.profit > 0) return s.profit;
+    return s.items?.reduce((acc: number, item: any) => {
+      const cost = (item.costPrice && item.costPrice > 0) ? item.costPrice : 0;
+      return acc + (item.unitPrice - cost) * item.qty;
+    }, 0) ?? s.total;
+  }
+
+  const todayGrossProfit = todaySales.reduce((a, s) => a + getSaleProfit(s), 0);
   const todayExpenses = expenses.filter(e => e.date === todayStr).reduce((a, e) => a + e.amount, 0);
   const todayNetProfit = todayGrossProfit - todayExpenses;
 
   const week = new Date(today); week.setDate(week.getDate() - 7);
   const weekSales = sales.filter(s => new Date(s.timestamp) >= week);
   const weekRevenue = weekSales.reduce((a, s) => a + s.total, 0);
-  const weekGrossProfit = weekSales.reduce((a, s) => a + s.profit, 0);
+  const weekGrossProfit = weekSales.reduce((a, s) => a + getSaleProfit(s), 0);
   const weekExpenses = expenses.filter(e => new Date(e.date) >= week).reduce((a, e) => a + e.amount, 0);
   const weekNetProfit = weekGrossProfit - weekExpenses;
 
-  const lowStock = products.filter(p => p.active && p.qty <= p.reorderPoint);
+  const lowStock = activeProducts.filter(p => p.qty <= p.reorderPoint);
 
   const dailyData = useMemo(() => {
     const days = [];
@@ -60,7 +73,7 @@ export default function Dashboard() {
       days.push({
         day: d.toLocaleDateString('en-NG', { weekday: 'short' }),
         revenue: ds.reduce((a, s) => a + s.total, 0),
-        profit: ds.reduce((a, s) => a + s.profit, 0) - exps,
+        profit: ds.reduce((a, s) => a + getSaleProfit(s), 0) - exps,
       });
     }
     return days;
@@ -90,7 +103,7 @@ export default function Dashboard() {
         <StatCard label="Today's Net Profit" value={fmt(todayNetProfit)} sub={`Gross ${fmt(todayGrossProfit)} - Exp ${fmt(todayExpenses)}`} icon={<TrendingUp size={16} />} />
         <StatCard label="Week's Revenue" value={fmt(weekRevenue)} sub={`${weekSales.length} sales`} icon={<ShoppingBag size={16} />} />
         <StatCard label="Week's Net Profit" value={fmt(weekNetProfit)} sub={`Gross ${fmt(weekGrossProfit)} - Exp ${fmt(weekExpenses)}`} icon={<TrendingUp size={16} />} />
-        <StatCard label="Week Expenditures" value={fmt(weekExpenses)} sub="shop operating costs" icon={<Receipt size={16} />} />
+        <StatCard label="Total Stock Units" value={`${totalStockUnits.toLocaleString()} units`} sub={`${activeProducts.length} active SKUs`} icon={<Layers size={16} />} />
         <StatCard label="Low Stock Alerts" value={String(lowStock.length)} sub="at or below reorder" icon={<AlertTriangle size={16} />} accent={lowStock.length > 0} />
       </div>
 

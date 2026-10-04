@@ -1,19 +1,28 @@
 import { useState } from 'react';
-import { uid, StockMovement } from '../store';
+import { uid, StockMovement, PurchaseOrder, fmt, saveSinglePO, saveSingleProduct, saveSingleMovement } from '../store';
 import { useData } from '../DataContext';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ShoppingCart, CheckCircle, Plus, Truck, PackageCheck } from 'lucide-react';
 
 const REASONS = ['Physical count correction', 'Damaged item', 'Theft/loss', 'Supplier return', 'Manual restock', 'Other'];
 
 export default function Stock() {
-  const { products, movements, settings, setProducts, addStockMovement } = useData();
-  const [tab, setTab] = useState<'overview' | 'movements' | 'adjust'>('overview');
+  const { products, movements, pos, suppliers, settings, setProducts, addStockMovement, setPOs } = useData();
+  const [tab, setTab] = useState<'overview' | 'movements' | 'purchases' | 'adjust'>('overview');
+
+  // Manual Adjust State
   const [adjustProduct, setAdjustProduct] = useState('');
   const [adjustQty, setAdjustQty] = useState(0);
   const [adjustReason, setAdjustReason] = useState(REASONS[0]);
   const [adjustNote, setAdjustNote] = useState('');
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
+
+  // Purchase Order State
+  const [showPOModal, setShowPOModal] = useState(false);
+  const [poSupplierId, setPoSupplierId] = useState('');
+  const [poItems, setPoItems] = useState<{ productId: string; name: string; qty: number; unitCost: number }[]>([]);
+  const [selectedProductToAdd, setSelectedProductToAdd] = useState('');
+  const [productOrderQty, setProductOrderQty] = useState(10);
 
   const lowStock = products.filter(p => p.active && p.qty <= p.reorderPoint);
 
@@ -34,19 +43,93 @@ export default function Stock() {
     setTab('movements');
   }
 
+  function addProductToPO() {
+    if (!selectedProductToAdd) return;
+    const p = products.find(prod => prod.id === selectedProductToAdd);
+    if (!p) return;
+
+    if (poItems.some(item => item.productId === p.id)) return;
+
+    setPoItems(prev => [...prev, {
+      productId: p.id,
+      name: p.name,
+      qty: productOrderQty || 10,
+      unitCost: p.costPrice || 0,
+    }]);
+    setSelectedProductToAdd('');
+  }
+
+  async function createPurchaseOrder(e: React.FormEvent) {
+    e.preventDefault();
+    if (!poSupplierId || poItems.length === 0) {
+      alert('Please select a supplier and add at least one product.');
+      return;
+    }
+
+    const newPO: PurchaseOrder = {
+      id: uid(),
+      supplierId: poSupplierId,
+      items: poItems,
+      status: 'sent',
+      createdAt: new Date().toISOString(),
+    };
+
+    await saveSinglePO(newPO);
+    setPOs([newPO, ...pos]);
+    setPoItems([]);
+    setPoSupplierId('');
+    setShowPOModal(false);
+  }
+
+  async function receivePurchaseOrder(po: PurchaseOrder) {
+    if (po.status === 'received') return;
+    if (!confirm(`Confirm receipt of Purchase Order #${po.id.slice(-6)}? Stock levels will be updated.`)) return;
+
+    const updatedProducts = [...products];
+    const newMovements: StockMovement[] = [];
+
+    for (const item of po.items) {
+      const pIndex = updatedProducts.findIndex(p => p.id === item.productId);
+      if (pIndex !== -1) {
+        const p = updatedProducts[pIndex];
+        const newQty = p.qty + item.qty;
+        updatedProducts[pIndex] = { ...p, qty: newQty, costPrice: item.unitCost || p.costPrice };
+        saveSingleProduct(updatedProducts[pIndex]).catch(() => {});
+
+        const mv: StockMovement = {
+          id: uid(),
+          productId: p.id,
+          type: 'restock',
+          qty: item.qty,
+          reason: `PO #${po.id.slice(-6)} Received`,
+          userId: 'admin',
+          timestamp: new Date().toISOString(),
+        };
+        newMovements.push(mv);
+        saveSingleMovement(mv).catch(() => {});
+      }
+    }
+
+    const updatedPO: PurchaseOrder = { ...po, status: 'received', receivedAt: new Date().toISOString() };
+    await saveSinglePO(updatedPO);
+
+    setProducts(updatedProducts);
+    setPOs(pos.map(p => p.id === po.id ? updatedPO : p));
+  }
+
   const typeColors: Record<string, string> = { sale: '#6b7280', restock: '#22c55e', adjustment: '#f59e0b', return: '#3b82f6', damage: '#ef4444' };
 
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Stock Control</h1>
-        <p style={{ color: 'var(--muted-foreground)', margin: '4px 0 0', fontSize: 13 }}>Real-time stock levels and movement log</p>
+        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Stock Control & Reorder Management</h1>
+        <p style={{ color: 'var(--muted-foreground)', margin: '4px 0 0', fontSize: 13 }}>Real-time inventory levels, stock reordering, and audit trail</p>
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-        {(['overview', 'movements', 'adjust'] as const).map(t => (
+        {(['overview', 'movements', 'purchases', 'adjust'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{ padding: '7px 16px', borderRadius: 'var(--radius)', fontSize: 13, fontWeight: 500, background: tab === t ? 'var(--primary)' : 'var(--secondary)', color: tab === t ? 'var(--primary-foreground)' : 'var(--foreground)', textTransform: 'capitalize' }}>
-            {t === 'adjust' ? 'Manual Adjust (Admin)' : t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === 'purchases' ? 'Purchases & Restock' : t === 'adjust' ? 'Manual Adjust (Admin)' : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
@@ -96,6 +179,145 @@ export default function Stock() {
             </table>
           </div>
         </>
+      )}
+
+      {tab === 'purchases' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Stock Purchase Orders</h2>
+              <p style={{ fontSize: 12, color: 'var(--muted-foreground)', margin: '2px 0 0' }}>Order inventory from suppliers and receive shipments cleanly</p>
+            </div>
+            <button
+              onClick={() => setShowPOModal(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: 'var(--primary)', color: 'var(--primary-foreground)',
+                border: 'none', borderRadius: 'var(--radius)', padding: '8px 14px',
+                fontWeight: 600, fontSize: 13, cursor: 'pointer',
+              }}
+            >
+              <Plus size={15} /> Create Purchase Order
+            </button>
+          </div>
+
+          <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: 'var(--secondary)', borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--muted-foreground)' }}>PO ID</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--muted-foreground)' }}>Supplier</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--muted-foreground)' }}>Items</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--muted-foreground)' }}>Status</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--muted-foreground)' }}>Date Created</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--muted-foreground)', textAlign: 'center' }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pos.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: 32, textAlign: 'center', color: 'var(--muted-foreground)' }}>
+                      No purchase orders recorded yet. Click <strong>"Create Purchase Order"</strong> to start.
+                    </td>
+                  </tr>
+                ) : pos.map(po => {
+                  const supplier = suppliers.find(s => s.id === po.supplierId);
+                  return (
+                    <tr key={po.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono-face)', fontWeight: 600 }}>#{po.id.slice(-6)}</td>
+                      <td style={{ padding: '10px 14px', fontWeight: 500 }}>{supplier?.name || po.supplierId || 'Direct Supplier'}</td>
+                      <td style={{ padding: '10px 14px' }}>
+                        {po.items.map((it, idx) => (
+                          <div key={idx} style={{ fontSize: 12 }}>{it.name} × <strong>{it.qty}</strong> ({fmt(it.unitCost)} ea)</div>
+                        ))}
+                      </td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <span style={{
+                          background: po.status === 'received' ? 'rgba(34,197,94,0.15)' : 'rgba(37,99,235,0.15)',
+                          color: po.status === 'received' ? '#16a34a' : 'var(--primary)',
+                          border: `1px solid ${po.status === 'received' ? 'rgba(34,197,94,0.3)' : 'rgba(37,99,235,0.3)'}`,
+                          borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 600, textTransform: 'capitalize',
+                        }}>
+                          {po.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono-face)', fontSize: 12, color: 'var(--muted-foreground)' }}>
+                        {new Date(po.createdAt).toLocaleDateString('en-NG')}
+                      </td>
+                      <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                        {po.status !== 'received' ? (
+                          <button
+                            onClick={() => receivePurchaseOrder(po)}
+                            style={{
+                              background: '#16a34a', color: '#fff', border: 'none',
+                              borderRadius: 4, padding: '4px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                            }}
+                          >
+                            Receive Order
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>Received</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {showPOModal && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+              <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, width: '100%', maxWidth: 520, padding: 24 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 16px' }}>Create Stock Purchase Order</h2>
+                <form onSubmit={createPurchaseOrder} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: 'var(--muted-foreground)' }}>Supplier *</label>
+                    <select value={poSupplierId} onChange={e => setPoSupplierId(e.target.value)} required style={{ width: '100%', padding: '8px 12px' }}>
+                      <option value="">Select Supplier...</option>
+                      {suppliers.map(s => <option key={s.id} value={s.id}>{s.name} ({s.parts || 'General Parts'})</option>)}
+                    </select>
+                  </div>
+
+                  <div style={{ background: 'var(--secondary)', padding: 12, borderRadius: 8 }}>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Add Products to Purchase Order</label>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                      <select value={selectedProductToAdd} onChange={e => setSelectedProductToAdd(e.target.value)} style={{ flex: 1, padding: '8px' }}>
+                        <option value="">Select Product...</option>
+                        {products.filter(p => p.active).map(p => <option key={p.id} value={p.id}>{p.name} (In stock: {p.qty})</option>)}
+                      </select>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Order Qty"
+                        value={productOrderQty}
+                        onChange={e => setProductOrderQty(+e.target.value)}
+                        style={{ width: 90, padding: '8px' }}
+                      />
+                      <button type="button" onClick={addProductToPO} style={{ background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4, padding: '0 12px', fontWeight: 600, cursor: 'pointer' }}>Add</button>
+                    </div>
+
+                    {poItems.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+                        {poItems.map((it, idx) => (
+                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--card)', padding: '6px 10px', borderRadius: 4, fontSize: 12 }}>
+                            <span><strong>{it.name}</strong> × {it.qty}</span>
+                            <button type="button" onClick={() => setPoItems(poItems.filter((_, i) => i !== idx))} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11 }}>Remove</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
+                    <button type="button" onClick={() => setShowPOModal(false)} style={{ padding: '8px 14px', background: 'var(--secondary)', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+                    <button type="submit" style={{ padding: '8px 14px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}>Save Purchase Order</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {tab === 'movements' && (
