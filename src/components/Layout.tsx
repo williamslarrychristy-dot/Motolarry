@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Package, ShoppingCart, TrendingUp, Users,
   Truck, ArrowUpDown, Download, Settings, Menu, X, ChevronRight, Bell,
-  LogIn, LogOut, User, Receipt, BarChart3
+  LogIn, LogOut, User, Receipt, BarChart3, Pin, PinOff, Wifi, WifiOff, RefreshCw
 } from 'lucide-react';
 import { useData } from '../DataContext';
 import { supabase } from '../lib/supabase';
@@ -35,12 +35,32 @@ interface Props {
 }
 
 export default function Layout({ current, onNavigate, children }: Props) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [locked, setLocked] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('motolarry_sidebar_locked') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [hovered, setHovered] = useState<boolean>(false);
+
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
-  const { products, settings, schemaMissing } = useData();
+  const { products, settings, schemaMissing, isOnline, syncNotice } = useData();
   const lowStock = products.filter(p => p.active && p.qty <= p.reorderPoint).length;
+
+  const sidebarOpen = locked || hovered;
+
+  function toggleLock() {
+    setLocked(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('motolarry_sidebar_locked', String(next));
+      } catch {}
+      return next;
+    });
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -70,15 +90,46 @@ export default function Layout({ current, onNavigate, children }: Props) {
       />
 
       {/* Sidebar */}
-      <aside style={{
-        width: sidebarOpen ? 220 : 0, minWidth: sidebarOpen ? 220 : 0,
-        background: 'var(--card)', borderRight: '1px solid var(--border)',
-        display: 'flex', flexDirection: 'column',
-        transition: 'width 0.2s, min-width 0.2s', overflow: 'hidden',
-      }}>
-        <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)', letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Motolarry</div>
-          <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginTop: 2, whiteSpace: 'nowrap' }}>Inventory & POS</div>
+      <aside
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          width: sidebarOpen ? 220 : 60,
+          minWidth: sidebarOpen ? 220 : 60,
+          background: 'var(--card)', borderRight: '1px solid var(--border)',
+          display: 'flex', flexDirection: 'column',
+          transition: 'width 0.2s ease, min-width 0.2s ease', overflow: 'hidden',
+          zIndex: 50,
+        }}
+      >
+        <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <circle cx="12" cy="12" r="3" />
+              <line x1="12" y1="3" x2="12" y2="9" />
+              <line x1="12" y1="15" x2="12" y2="21" />
+              <line x1="3" y1="12" x2="9" y2="12" />
+              <line x1="15" y1="12" x2="21" y2="12" />
+            </svg>
+            {sidebarOpen && (
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)', letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Motolarry</div>
+                <div style={{ fontSize: 10, color: 'var(--muted-foreground)', whiteSpace: 'nowrap' }}>Inventory & POS</div>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={toggleLock}
+            title={locked ? "Unlock sidebar (auto-collapse)" : "Lock sidebar open"}
+            style={{
+              background: 'none', border: 'none', color: locked ? 'var(--primary)' : 'var(--muted-foreground)',
+              cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center',
+            }}
+          >
+            {locked ? <Pin size={14} /> : <PinOff size={14} />}
+          </button>
         </div>
 
         <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
@@ -86,21 +137,23 @@ export default function Layout({ current, onNavigate, children }: Props) {
             const items = NAV.filter(n => n.group === group);
             return (
               <div key={group} style={{ marginBottom: 4 }}>
-                <div style={{ padding: '8px 16px 4px', fontSize: 10, fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                  {group === 'main' ? 'Operations' : group === 'ops' ? 'Management' : 'Admin'}
-                </div>
+                {sidebarOpen && (
+                  <div style={{ padding: '8px 16px 4px', fontSize: 10, fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    {group === 'main' ? 'Operations' : group === 'ops' ? 'Management' : 'Admin'}
+                  </div>
+                )}
                 {items.map(item => (
-                  <button key={item.id} onClick={() => onNavigate(item.id)} style={{
-                    display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                    padding: '8px 16px', textAlign: 'left',
+                  <button key={item.id} onClick={() => onNavigate(item.id)} title={!sidebarOpen ? item.label : undefined} style={{
+                    display: 'flex', alignItems: 'center', gap: 12, width: '100%',
+                    padding: sidebarOpen ? '8px 16px' : '10px 18px', textAlign: 'left',
                     background: current === item.id ? 'rgba(37,99,235,0.1)' : 'transparent',
                     color: current === item.id ? 'var(--primary)' : 'var(--secondary-foreground)',
                     borderLeft: current === item.id ? '3px solid var(--primary)' : '3px solid transparent',
                     fontWeight: current === item.id ? 600 : 400, fontSize: 13, whiteSpace: 'nowrap',
                   }}>
                     {item.icon}
-                    {item.label}
-                    {item.id === 'products' && lowStock > 0 && (
+                    {sidebarOpen && <span>{item.label}</span>}
+                    {sidebarOpen && item.id === 'products' && lowStock > 0 && (
                       <span style={{ marginLeft: 'auto', background: '#ef4444', color: '#fff', fontSize: 10, borderRadius: 10, padding: '1px 6px', fontFamily: 'var(--font-mono-face)' }}>{lowStock}</span>
                     )}
                   </button>
@@ -110,25 +163,31 @@ export default function Layout({ current, onNavigate, children }: Props) {
           })}
         </nav>
 
-        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--muted-foreground)' }}>
-          <div style={{ fontWeight: 600, color: 'var(--foreground)', fontSize: 12 }}>{settings.storeName || 'Motolarry Parts'}</div>
-        </div>
+        {sidebarOpen && (
+          <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--muted-foreground)' }}>
+            <div style={{ fontWeight: 600, color: 'var(--foreground)', fontSize: 12 }}>{settings.storeName || 'Motolarry Parts'}</div>
+          </div>
+        )}
       </aside>
 
       {/* Main */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <header style={{ height: 52, display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px', borderBottom: '1px solid var(--border)', background: 'var(--card)', flexShrink: 0 }}>
-          <button onClick={() => setSidebarOpen(v => !v)} style={{ background: 'none', color: 'var(--muted-foreground)', padding: 4, display: 'flex' }}>
-            {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
-          </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted-foreground)' }}>
-            <span>Motolarry</span>
+            <span style={{ fontWeight: 700, color: 'var(--primary)' }}>Motolarry</span>
             <ChevronRight size={12} />
             <span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{NAV.find(n => n.id === current)?.label}</span>
           </div>
+
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
+            {/* Connection Indicator */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: isOnline ? '#16a34a' : '#ef4444' }}>
+              {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
+              <span>{isOnline ? 'Cloud Online' : 'Offline Mode'}</span>
+            </div>
+
             {lowStock > 0 && (
-              <button onClick={() => onNavigate('stock')} style={{ background: 'none', border: 'none', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, cursor: 'cursor' }}>
+              <button onClick={() => onNavigate('stock')} style={{ background: 'none', border: 'none', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
                 <Bell size={15} />{lowStock} low stock
               </button>
             )}
@@ -166,6 +225,19 @@ export default function Layout({ current, onNavigate, children }: Props) {
         </header>
 
         <main style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+          {/* Sync Notice Banner */}
+          {syncNotice && (
+            <div style={{
+              background: 'rgba(37,99,235,0.12)', border: '1px solid rgba(37,99,235,0.3)',
+              borderRadius: 'var(--radius)', padding: '10px 16px', marginBottom: 16,
+              fontSize: 13, color: 'var(--primary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              <RefreshCw size={15} style={{ animation: 'spin 1.5s linear infinite' }} />
+              {syncNotice}
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            </div>
+          )}
+
           {schemaMissing && !bannerDismissed && (
             <div style={{
               background: 'rgba(234, 179, 8, 0.15)', border: '1px solid rgba(234, 179, 8, 0.4)',

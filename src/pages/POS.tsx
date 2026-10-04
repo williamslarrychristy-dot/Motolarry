@@ -1,12 +1,17 @@
 import { useState } from 'react';
-import { Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle, Receipt, Split } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle, Receipt, Split, Sparkles, Loader2 } from 'lucide-react';
 import { fmt, uid, CartItem, Sale, Product, saveSingleSale, saveSingleMovement, saveSingleProduct, saveSingleCustomer } from '../store';
 import { useData } from '../DataContext';
 import { sendStockMovementAlert } from '../lib/resend';
+import { queryAIAssistant } from '../lib/ai';
 
 export default function POS() {
   const { products, sales, movements, customers, setProducts, setSales, setMovements, setCustomers } = useData();
   const [search, setSearch] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResponse, setAiResponse] = useState<string | null>(null);
+  const [aiMatchedIds, setAiMatchedIds] = useState<string[] | null>(null);
+
   const [cart, setCart] = useState<CartItem[]>([]);
   const [payment, setPayment] = useState<Sale['payment']>('cash');
   const [isSplit, setIsSplit] = useState(false);
@@ -19,11 +24,33 @@ export default function POS() {
   const [completed, setCompleted] = useState<Sale | null>(null);
 
   const activeProducts = products.filter(p => p.active);
+
   const filtered = !search ? activeProducts : activeProducts.filter(p => {
+    if (aiMatchedIds) {
+      return aiMatchedIds.includes(p.id);
+    }
     const q = search.toLowerCase();
     return p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
-      || p.barcode.includes(q) || p.aliases.toLowerCase().includes(q);
+      || p.barcode.includes(q) || p.aliases.toLowerCase().includes(q) || p.category.toLowerCase().includes(q);
   });
+
+  async function handleAISearch() {
+    if (!search.trim()) return;
+    setAiLoading(true);
+    setAiResponse(null);
+    setAiMatchedIds(null);
+
+    const res = await queryAIAssistant(search, products);
+    setAiLoading(false);
+    setAiResponse(res.answer);
+    setAiMatchedIds(res.matchedProductIds);
+  }
+
+  function clearAISearch() {
+    setSearch('');
+    setAiResponse(null);
+    setAiMatchedIds(null);
+  }
 
   function addToCart(p: Product) {
     setCart(prev => {
@@ -51,7 +78,13 @@ export default function POS() {
   }
 
   const subtotal = cart.reduce((a, c) => a + c.product.salePrice * c.qty, 0);
-  const profit = cart.reduce((a, c) => a + (c.product.salePrice - c.product.costPrice) * c.qty, 0);
+
+  // Profit calculation rule: If costPrice is 0 or missing, profit = salePrice
+  const profit = cart.reduce((a, c) => {
+    const itemCost = (c.product.costPrice && c.product.costPrice > 0) ? c.product.costPrice : 0;
+    const itemProfit = c.product.salePrice - itemCost;
+    return a + itemProfit * c.qty;
+  }, 0);
 
   function checkout() {
     if (cart.length === 0) return;
@@ -70,14 +103,17 @@ export default function POS() {
       payments: salePayments,
       customerId: customerId || undefined,
       note,
-      items: cart.map(c => ({
-        productId: c.product.id,
-        name: c.product.name,
-        sku: c.product.sku,
-        qty: c.qty,
-        unitPrice: c.product.salePrice,
-        costPrice: c.product.costPrice,
-      })),
+      items: cart.map(c => {
+        const itemCost = (c.product.costPrice && c.product.costPrice > 0) ? c.product.costPrice : 0;
+        return {
+          productId: c.product.id,
+          name: c.product.name,
+          sku: c.product.sku,
+          qty: c.qty,
+          unitPrice: c.product.salePrice,
+          costPrice: itemCost,
+        };
+      }),
       total: subtotal,
       profit,
       timestamp: new Date().toISOString(),
@@ -197,11 +233,53 @@ export default function POS() {
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ marginBottom: 12 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 12px' }}>POS / Checkout</h1>
-          <div style={{ position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted-foreground)' }} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, SKU, barcode, alias…" style={{ width: '100%', paddingLeft: 32 }} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted-foreground)' }} />
+              <input
+                value={search}
+                onChange={e => {
+                  setSearch(e.target.value);
+                  if (aiMatchedIds) setAiMatchedIds(null);
+                }}
+                placeholder="Search by name, SKU, barcode, alias, or customer description…"
+                style={{ width: '100%', paddingLeft: 32 }}
+              />
+            </div>
+            <button
+              onClick={handleAISearch}
+              disabled={aiLoading || !search.trim()}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: 'linear-gradient(135deg, #2563eb, #7c3aed)', color: '#fff',
+                border: 'none', borderRadius: 'var(--radius)', padding: '0 14px',
+                fontWeight: 600, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              {aiLoading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Sparkles size={14} />}
+              AI Search
+            </button>
+            {(search || aiResponse) && (
+              <button
+                onClick={clearAISearch}
+                style={{
+                  background: 'var(--secondary)', border: 'none', color: 'var(--foreground)',
+                  borderRadius: 'var(--radius)', padding: '0 10px', fontSize: 12, cursor: 'pointer',
+                }}
+              >
+                Clear
+              </button>
+            )}
           </div>
+
+          {aiResponse && (
+            <div style={{ marginTop: 8, background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.3)', borderRadius: 6, padding: '8px 12px', fontSize: 12, color: '#7c3aed', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Sparkles size={14} flexShrink={0} />
+              <div><strong>AI Assist:</strong> {aiResponse}</div>
+            </div>
+          )}
         </div>
+
         {activeProducts.length === 0 ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted-foreground)', fontSize: 13 }}>
             No products yet — add products in the Products page first

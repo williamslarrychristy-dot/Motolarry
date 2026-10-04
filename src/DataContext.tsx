@@ -6,11 +6,16 @@ import {
   saveSingleMovement, saveSingleExpense,
 } from './store';
 import { supabase, ensureTablesExist } from './lib/supabase';
+import {
+  saveLocalCache, loadLocalCache, enqueueOfflineMutation, flushOfflineMutations, getQueuedMutations
+} from './lib/offlineStore';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { sendStockMovementAlert } from './lib/resend';
 
 interface DataContextValue extends AppData {
   loading: boolean;
+  isOnline: boolean;
+  syncNotice: string | null;
   schemaMissing: boolean;
   setProducts: (p: Product[]) => void;
   setSales: (s: Sale[]) => void;
@@ -29,6 +34,8 @@ const Ctx = createContext<DataContextValue | null>(null);
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [schemaMissing, setSchemaMissing] = useState(false);
   const [data, setData] = useState<AppData>({
     products: [], sales: [], movements: [], suppliers: [],
@@ -39,24 +46,69 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const tablesOk = await ensureTablesExist();
-    setSchemaMissing(!tablesOk);
-    const fresh = await loadAllFromCloud();
-    setData(fresh);
+
+    if (navigator.onLine) {
+      const tablesOk = await ensureTablesExist();
+      setSchemaMissing(!tablesOk);
+      const fresh = await loadAllFromCloud();
+
+      // If cloud fetch returned records, update local cache
+      if (fresh.products.length > 0 || fresh.sales.length > 0) {
+        setData(fresh);
+        saveLocalCache(fresh);
+      } else {
+        // Fall back to local cache if cloud is empty/uninitialized
+        const cached = loadLocalCache();
+        if (cached) setData(cached);
+        else setData(fresh);
+      }
+    } else {
+      // Offline fallback
+      const cached = loadLocalCache();
+      if (cached) setData(cached);
+    }
+
     setLoading(false);
   }, []);
+
+  const syncPending = useCallback(async () => {
+    const pending = getQueuedMutations();
+    if (pending.length > 0 && navigator.onLine) {
+      setSyncNotice(`🔄 Syncing ${pending.length} offline changes to cloud database...`);
+      const synced = await flushOfflineMutations();
+      setSyncNotice(`✅ Successfully synced ${synced} changes to cloud!`);
+      setTimeout(() => setSyncNotice(null), 4000);
+      load();
+    }
+  }, [load]);
 
   useEffect(() => {
     load();
 
-    // Setup Supabase Realtime WebSocket Broadcast Channel & Postgres Changes
-    const channel = supabase.channel('inventory-realtime');
+    const handleOnline = () => {
+      setIsOnline(true);
+      syncPending();
+    };
 
+    const handleOffline = () => {
+      setIsOnline(false);
+      setSyncNotice('⚡ Offline mode active. All changes are saved locally & will sync when online.');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Setup Supabase Realtime Broadcast Channel
+    const channel = supabase.channel('inventory-realtime');
     channel.on('broadcast', { event: 'state_change' }, (payload) => {
       if (payload.payload) {
         const { entity, value } = payload.payload;
         if (entity && value) {
-          setData(prev => ({ ...prev, [entity]: value }));
+          setData(prev => {
+            const next = { ...prev, [entity]: value };
+            saveLocalCache(next);
+            return next;
+          });
         }
       }
     });
@@ -68,9 +120,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
       supabase.removeChannel(channel);
     };
-  }, [load]);
+  }, [load, syncPending]);
 
   const broadcastChange = (entity: keyof AppData, value: unknown) => {
     if (channelRef.current) {
@@ -82,31 +136,52 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  function updateAndPersist(updater: (prev: AppData) => AppData, entity: keyof AppData, saveFn: (val: any) => Promise<void>, val: any) {
+    setData(prev => {
+      const next = updater(prev);
+      saveLocalCache(next);
+      return next;
+    });
+
+    if (navigator.onLine) {
+      saveFn(val).catch(() => {
+        enqueueOfflineMutation(entity as any, val);
+      });
+      broadcastChange(entity, val);
+    } else {
+      enqueueOfflineMutation(entity as any, val);
+    }
+  }
+
   function setProducts(p: Product[]) {
-    setData(d => ({ ...d, products: p }));
-    saveProducts(p).catch(() => {});
-    broadcastChange('products', p);
+    updateAndPersist(d => ({ ...d, products: p }), 'products', saveProducts, p);
   }
 
   function setSales(s: Sale[]) {
-    setData(d => ({ ...d, sales: s }));
-    saveSales(s).catch(() => {});
-    broadcastChange('sales', s);
+    updateAndPersist(d => ({ ...d, sales: s }), 'sales', saveSales, s);
   }
 
   function setMovements(m: StockMovement[]) {
-    setData(d => ({ ...d, movements: m }));
-    saveMovements(m).catch(() => {});
-    broadcastChange('movements', m);
+    updateAndPersist(d => ({ ...d, movements: m }), 'movements', saveMovements, m);
   }
 
   async function addStockMovement(m: StockMovement, productName?: string, sku?: string, newTotalQty?: number) {
     const updated = [m, ...data.movements];
-    setData(d => ({ ...d, movements: updated }));
-    saveSingleMovement(m).catch(() => {});
-    broadcastChange('movements', updated);
+    setData(d => {
+      const next = { ...d, movements: updated };
+      saveLocalCache(next);
+      return next;
+    });
 
-    // Send email alert for stock addition / subtraction
+    if (navigator.onLine) {
+      saveSingleMovement(m).catch(() => {
+        enqueueOfflineMutation('movements', updated);
+      });
+      broadcastChange('movements', updated);
+    } else {
+      enqueueOfflineMutation('movements', updated);
+    }
+
     const targetProduct = data.products.find(p => p.id === m.productId);
     const name = productName || targetProduct?.name || 'Item';
     const itemSku = sku || targetProduct?.sku || 'SKU';
@@ -123,46 +198,49 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }
 
   function setSuppliers(s: Supplier[]) {
-    setData(d => ({ ...d, suppliers: s }));
-    saveSuppliers(s).catch(() => {});
-    broadcastChange('suppliers', s);
+    updateAndPersist(d => ({ ...d, suppliers: s }), 'suppliers', saveSuppliers, s);
   }
 
   function setCustomers(c: Customer[]) {
-    setData(d => ({ ...d, customers: c }));
-    saveCustomers(c).catch(() => {});
-    broadcastChange('customers', c);
+    updateAndPersist(d => ({ ...d, customers: c }), 'customers', saveCustomers, c);
   }
 
   function setPOs(p: PurchaseOrder[]) {
-    setData(d => ({ ...d, pos: p }));
-    savePOs(p).catch(() => {});
-    broadcastChange('pos', p);
+    updateAndPersist(d => ({ ...d, pos: p }), 'pos', savePOs, p);
   }
 
   function setExpenses(e: Expense[]) {
-    setData(d => ({ ...d, expenses: e }));
-    saveExpenses(e).catch(() => {});
-    broadcastChange('expenses', e);
+    updateAndPersist(d => ({ ...d, expenses: e }), 'expenses', saveExpenses, e);
   }
 
   async function addExpense(e: Expense) {
     const updated = [e, ...data.expenses];
-    setData(d => ({ ...d, expenses: updated }));
-    saveSingleExpense(e).catch(() => {});
-    broadcastChange('expenses', updated);
+    setData(d => {
+      const next = { ...d, expenses: updated };
+      saveLocalCache(next);
+      return next;
+    });
+
+    if (navigator.onLine) {
+      saveSingleExpense(e).catch(() => {
+        enqueueOfflineMutation('expenses', updated);
+      });
+      broadcastChange('expenses', updated);
+    } else {
+      enqueueOfflineMutation('expenses', updated);
+    }
   }
 
   function setSettings(s: AppSettings) {
-    setData(d => ({ ...d, settings: s }));
-    saveSettings(s).catch(() => {});
-    broadcastChange('settings', s);
+    updateAndPersist(d => ({ ...d, settings: s }), 'settings', saveSettings, s);
   }
 
   return (
     <Ctx.Provider value={{
       ...data,
       loading,
+      isOnline,
+      syncNotice,
       schemaMissing,
       setProducts,
       setSales,
