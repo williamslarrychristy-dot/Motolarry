@@ -8,7 +8,6 @@ import Sales from './pages/Sales';
 import Expenditures from './pages/Expenditures';
 import Reports from './pages/Reports';
 import Stock from './pages/Stock';
-import AIAssist from './pages/AIAssist';
 import Customers from './pages/Customers';
 import Suppliers from './pages/Suppliers';
 import ImportExport from './pages/ImportExport';
@@ -107,7 +106,6 @@ function AppShell() {
     expenditures: <Expenditures />,
     reports: <Reports />,
     stock: <Stock />,
-    'ai-assist': <AIAssist />,
     customers: <Customers />,
     suppliers: <Suppliers />,
     'import-export': <ImportExport />,
