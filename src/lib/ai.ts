@@ -1,7 +1,7 @@
 import { Product, Sale, StockMovement, Supplier, Customer, Expense, uid, saveSingleProduct, saveSingleMovement, saveSingleSale, fmt } from '../store';
 import { supabase } from './supabase';
 
-const GEMINI_API_KEY = "AQ.Ab8RN6I7qwIhYaDggaDPjACMQDKSpB1A5122wNnChh8IC_zTEw";
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
 
 export type AIAgentContext = {
   products: Product[];
@@ -92,118 +92,120 @@ Respond in JSON with this structure:
 `;
 
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: systemPrompt }] }],
-        generationConfig: { responseMimeType: "application/json" }
-      })
-    });
+    if (GEMINI_API_KEY) {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: systemPrompt }] }],
+          generationConfig: { responseMimeType: "application/json" }
+        })
+      });
 
-    if (res.ok) {
-      const data = await res.json();
-      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (rawText) {
-        const parsed = JSON.parse(rawText);
-        const explanation = parsed.explanation || "Action completed.";
-        const toolCalls = Array.isArray(parsed.toolCalls) ? parsed.toolCalls : [];
+      if (res.ok) {
+        const data = await res.json();
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawText) {
+          const parsed = JSON.parse(rawText);
+          const explanation = parsed.explanation || "Action completed.";
+          const toolCalls = Array.isArray(parsed.toolCalls) ? parsed.toolCalls : [];
 
-        let updatedProducts = [...ctx.products];
+          let updatedProducts = [...ctx.products];
 
-        for (const call of toolCalls) {
-          if (call.tool === 'UPDATE_STOCK') {
-            const { productId, productName, mode, qty, reason } = call.params || {};
-            const target = updatedProducts.find(p => p.id === productId || p.name.toLowerCase().includes((productName || '').toLowerCase()));
-            if (target) {
-              let newQty = target.qty;
-              if (mode === 'add') newQty += Number(qty || 0);
-              else if (mode === 'subtract') newQty = Math.max(0, newQty - Number(qty || 0));
-              else if (mode === 'set') newQty = Number(qty || 0);
+          for (const call of toolCalls) {
+            if (call.tool === 'UPDATE_STOCK') {
+              const { productId, productName, mode, qty, reason } = call.params || {};
+              const target = updatedProducts.find(p => p.id === productId || p.name.toLowerCase().includes((productName || '').toLowerCase()));
+              if (target) {
+                let newQty = target.qty;
+                if (mode === 'add') newQty += Number(qty || 0);
+                else if (mode === 'subtract') newQty = Math.max(0, newQty - Number(qty || 0));
+                else if (mode === 'set') newQty = Number(qty || 0);
 
-              const qtyDiff = newQty - target.qty;
-              target.qty = newQty;
-              await saveSingleProduct(target);
+                const qtyDiff = newQty - target.qty;
+                target.qty = newQty;
+                await saveSingleProduct(target);
 
-              const mv: StockMovement = {
-                id: uid(),
-                productId: target.id,
-                type: qtyDiff >= 0 ? 'restock' : 'adjustment',
-                qty: qtyDiff,
-                reason: reason || `AI Agent command: ${userCommand}`,
-                userId: 'ai_agent',
-                timestamp: new Date().toISOString(),
-              };
-              await saveSingleMovement(mv);
-              executedActions.push(`Updated stock of "${target.name}" to ${newQty} units (${qtyDiff >= 0 ? '+' : ''}${qtyDiff}).`);
-            }
-          } else if (call.tool === 'UPDATE_PRICE') {
-            const { productId, productName, salePrice, costPrice } = call.params || {};
-            const target = updatedProducts.find(p => p.id === productId || p.name.toLowerCase().includes((productName || '').toLowerCase()));
-            if (target) {
-              if (salePrice !== undefined && salePrice !== null) target.salePrice = Number(salePrice);
-              if (costPrice !== undefined && costPrice !== null) target.costPrice = Number(costPrice);
-              await saveSingleProduct(target);
-              executedActions.push(`Updated prices for "${target.name}" (Sale: ₦${target.salePrice}, Cost: ₦${target.costPrice}).`);
-            }
-          } else if (call.tool === 'UPDATE_DETAILS') {
-            const { productId, productName, name, aliases, description, category } = call.params || {};
-            const target = updatedProducts.find(p => p.id === productId || p.name.toLowerCase().includes((productName || '').toLowerCase()));
-            if (target) {
-              if (name) target.name = name;
-              if (aliases) target.aliases = target.aliases ? `${target.aliases}, ${aliases}` : aliases;
-              if (description) target.description = description;
-              if (category) target.category = category;
-              await saveSingleProduct(target);
-              executedActions.push(`Updated details for "${target.name}".`);
-            }
-          } else if (call.tool === 'CREATE_PRODUCT') {
-            const { name, category, salePrice, costPrice, qty, sku, aliases } = call.params || {};
-            if (name) {
-              const newProd: Product = {
-                id: uid(),
-                name,
-                description: 'Created by AI Assistant',
-                sku: sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
-                barcode: '',
-                category: category || 'General',
-                subcategory: '',
-                brand: '',
-                manufacturer: '',
-                fitment: '',
-                costPrice: Number(costPrice || 0),
-                salePrice: Number(salePrice || 0),
-                msrp: 0,
-                qty: Number(qty || 0),
-                reorderPoint: 5,
-                reorderQty: 10,
-                location: '',
-                imageUrl: '',
-                aliases: aliases || '',
-                active: true,
-                tags: 'ai-created',
-                serialTracked: false,
-                supplierId: '',
-                createdAt: new Date().toISOString(),
-              };
-              await saveSingleProduct(newProd);
-              updatedProducts.push(newProd);
-              executedActions.push(`Created product "${newProd.name}" (SKU: ${newProd.sku}, Price: ₦${newProd.salePrice}, Stock: ${newProd.qty}).`);
-            }
-          } else if (call.tool === 'DELETE_PRODUCT') {
-            const { productId, productName } = call.params || {};
-            const targetIndex = updatedProducts.findIndex(p => p.id === productId || p.name.toLowerCase().includes((productName || '').toLowerCase()));
-            if (targetIndex !== -1) {
-              const removed = updatedProducts[targetIndex];
-              updatedProducts = updatedProducts.filter((_, idx) => idx !== targetIndex);
-              await supabase.from('products').delete().eq('id', removed.id);
-              executedActions.push(`Deleted product "${removed.name}".`);
+                const mv: StockMovement = {
+                  id: uid(),
+                  productId: target.id,
+                  type: qtyDiff >= 0 ? 'restock' : 'adjustment',
+                  qty: qtyDiff,
+                  reason: reason || `AI Agent command: ${userCommand}`,
+                  userId: 'ai_agent',
+                  timestamp: new Date().toISOString(),
+                };
+                await saveSingleMovement(mv);
+                executedActions.push(`Updated stock of "${target.name}" to ${newQty} units (${qtyDiff >= 0 ? '+' : ''}${qtyDiff}).`);
+              }
+            } else if (call.tool === 'UPDATE_PRICE') {
+              const { productId, productName, salePrice, costPrice } = call.params || {};
+              const target = updatedProducts.find(p => p.id === productId || p.name.toLowerCase().includes((productName || '').toLowerCase()));
+              if (target) {
+                if (salePrice !== undefined && salePrice !== null) target.salePrice = Number(salePrice);
+                if (costPrice !== undefined && costPrice !== null) target.costPrice = Number(costPrice);
+                await saveSingleProduct(target);
+                executedActions.push(`Updated prices for "${target.name}" (Sale: ₦${target.salePrice}, Cost: ₦${target.costPrice}).`);
+              }
+            } else if (call.tool === 'UPDATE_DETAILS') {
+              const { productId, productName, name, aliases, description, category } = call.params || {};
+              const target = updatedProducts.find(p => p.id === productId || p.name.toLowerCase().includes((productName || '').toLowerCase()));
+              if (target) {
+                if (name) target.name = name;
+                if (aliases) target.aliases = target.aliases ? `${target.aliases}, ${aliases}` : aliases;
+                if (description) target.description = description;
+                if (category) target.category = category;
+                await saveSingleProduct(target);
+                executedActions.push(`Updated details for "${target.name}".`);
+              }
+            } else if (call.tool === 'CREATE_PRODUCT') {
+              const { name, category, salePrice, costPrice, qty, sku, aliases } = call.params || {};
+              if (name) {
+                const newProd: Product = {
+                  id: uid(),
+                  name,
+                  description: 'Created by AI Assistant',
+                  sku: sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
+                  barcode: '',
+                  category: category || 'General',
+                  subcategory: '',
+                  brand: '',
+                  manufacturer: '',
+                  fitment: '',
+                  costPrice: Number(costPrice || 0),
+                  salePrice: Number(salePrice || 0),
+                  msrp: 0,
+                  qty: Number(qty || 0),
+                  reorderPoint: 5,
+                  reorderQty: 10,
+                  location: '',
+                  imageUrl: '',
+                  aliases: aliases || '',
+                  active: true,
+                  tags: 'ai-created',
+                  serialTracked: false,
+                  supplierId: '',
+                  createdAt: new Date().toISOString(),
+                };
+                await saveSingleProduct(newProd);
+                updatedProducts.push(newProd);
+                executedActions.push(`Created product "${newProd.name}" (SKU: ${newProd.sku}, Price: ₦${newProd.salePrice}, Stock: ${newProd.qty}).`);
+              }
+            } else if (call.tool === 'DELETE_PRODUCT') {
+              const { productId, productName } = call.params || {};
+              const targetIndex = updatedProducts.findIndex(p => p.id === productId || p.name.toLowerCase().includes((productName || '').toLowerCase()));
+              if (targetIndex !== -1) {
+                const removed = updatedProducts[targetIndex];
+                updatedProducts = updatedProducts.filter((_, idx) => idx !== targetIndex);
+                await supabase.from('products').delete().eq('id', removed.id);
+                executedActions.push(`Deleted product "${removed.name}".`);
+              }
             }
           }
-        }
 
-        ctx.setProducts(updatedProducts);
-        return { text: explanation, actionsExecuted };
+          ctx.setProducts(updatedProducts);
+          return { text: explanation, actionsExecuted };
+        }
       }
     }
   } catch (e) {

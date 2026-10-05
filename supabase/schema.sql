@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS public.kv_store_82d9e30e (
 -- 2. Products Table
 CREATE TABLE IF NOT EXISTS public.products (
     id TEXT PRIMARY KEY,
+    user_id TEXT,
     name TEXT NOT NULL,
     description TEXT,
     sku TEXT DEFAULT '',
@@ -48,6 +49,7 @@ CREATE TABLE IF NOT EXISTS public.products (
 -- 3. Sales Table
 CREATE TABLE IF NOT EXISTS public.sales (
     id TEXT PRIMARY KEY,
+    user_id TEXT,
     items JSONB NOT NULL,
     total NUMERIC(12,2) NOT NULL,
     profit NUMERIC(12,2) NOT NULL,
@@ -56,17 +58,20 @@ CREATE TABLE IF NOT EXISTS public.sales (
     customer_id TEXT,
     employee_id TEXT,
     note TEXT,
+    discount NUMERIC(12,2) DEFAULT 0,
+    amount_paid NUMERIC(12,2) DEFAULT 0,
+    returned_items JSONB,
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- 4. Stock Movements Table
 CREATE TABLE IF NOT EXISTS public.stock_movements (
     id TEXT PRIMARY KEY,
+    user_id TEXT,
     product_id TEXT NOT NULL,
     type TEXT NOT NULL,
     qty INT NOT NULL,
     reason TEXT,
-    user_id TEXT,
     sale_id TEXT,
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -74,6 +79,7 @@ CREATE TABLE IF NOT EXISTS public.stock_movements (
 -- 5. Suppliers Table
 CREATE TABLE IF NOT EXISTS public.suppliers (
     id TEXT PRIMARY KEY,
+    user_id TEXT,
     name TEXT NOT NULL,
     contact TEXT,
     phone TEXT,
@@ -85,16 +91,19 @@ CREATE TABLE IF NOT EXISTS public.suppliers (
 -- 6. Customers Table
 CREATE TABLE IF NOT EXISTS public.customers (
     id TEXT PRIMARY KEY,
+    user_id TEXT,
     name TEXT NOT NULL,
     phone TEXT,
     motorcycle TEXT,
     balance NUMERIC(12,2) DEFAULT 0,
+    payments JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- 7. Purchase Orders Table
 CREATE TABLE IF NOT EXISTS public.purchase_orders (
     id TEXT PRIMARY KEY,
+    user_id TEXT,
     supplier_id TEXT NOT NULL,
     items JSONB NOT NULL,
     status TEXT NOT NULL DEFAULT 'draft',
@@ -105,6 +114,7 @@ CREATE TABLE IF NOT EXISTS public.purchase_orders (
 -- 8. Expenses Table
 CREATE TABLE IF NOT EXISTS public.expenses (
     id TEXT PRIMARY KEY,
+    user_id TEXT,
     title TEXT NOT NULL,
     amount NUMERIC(12,2) NOT NULL,
     category TEXT DEFAULT 'General',
@@ -114,9 +124,22 @@ CREATE TABLE IF NOT EXISTS public.expenses (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 9. App Settings Table
+-- 9. Tasks & Reminders Table
+CREATE TABLE IF NOT EXISTS public.tasks (
+    id TEXT PRIMARY KEY,
+    user_id TEXT,
+    title TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    due_date DATE,
+    status TEXT DEFAULT 'pending',
+    priority TEXT DEFAULT 'medium',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 10. App Settings Table
 CREATE TABLE IF NOT EXISTS public.settings (
     id TEXT PRIMARY KEY DEFAULT 'default',
+    user_id TEXT,
     store_name TEXT DEFAULT 'Motolarry Moto Parts',
     currency TEXT DEFAULT 'NGN',
     admin_pin TEXT DEFAULT '1234',
@@ -129,9 +152,12 @@ CREATE TABLE IF NOT EXISTS public.settings (
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_products_sku ON public.products(sku);
 CREATE INDEX IF NOT EXISTS idx_products_category ON public.products(category);
+CREATE INDEX IF NOT EXISTS idx_products_user ON public.products(user_id);
 CREATE INDEX IF NOT EXISTS idx_sales_timestamp ON public.sales(timestamp);
+CREATE INDEX IF NOT EXISTS idx_sales_user ON public.sales(user_id);
 CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON public.stock_movements(product_id);
 CREATE INDEX IF NOT EXISTS idx_expenses_date ON public.expenses(date);
+CREATE INDEX IF NOT EXISTS idx_tasks_user ON public.tasks(user_id);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.kv_store ENABLE ROW LEVEL SECURITY;
@@ -143,6 +169,7 @@ ALTER TABLE public.suppliers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.purchase_orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.expenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies if present before recreating
@@ -155,6 +182,7 @@ DROP POLICY IF EXISTS "Access suppliers" ON public.suppliers;
 DROP POLICY IF EXISTS "Access customers" ON public.customers;
 DROP POLICY IF EXISTS "Access purchase_orders" ON public.purchase_orders;
 DROP POLICY IF EXISTS "Access expenses" ON public.expenses;
+DROP POLICY IF EXISTS "Access tasks" ON public.tasks;
 DROP POLICY IF EXISTS "Access settings" ON public.settings;
 
 -- Allow full read/write for authenticated users & anon terminals
@@ -167,6 +195,7 @@ CREATE POLICY "Access suppliers" ON public.suppliers FOR ALL USING (true) WITH C
 CREATE POLICY "Access customers" ON public.customers FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Access purchase_orders" ON public.purchase_orders FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Access expenses" ON public.expenses FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Access tasks" ON public.tasks FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Access settings" ON public.settings FOR ALL USING (true) WITH CHECK (true);
 
 -- Storage bucket setup for product images

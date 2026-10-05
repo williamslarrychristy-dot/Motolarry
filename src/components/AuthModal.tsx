@@ -1,178 +1,183 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { X, LogIn, UserPlus, AlertCircle, CheckCircle } from 'lucide-react';
+import { LogIn, UserPlus, X, Mail, Lock, AlertCircle } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
 }
 
-export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
+  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setMessage(null);
     setLoading(true);
 
     try {
-      if (mode === 'signin') {
-        const { error: err } = await supabase.auth.signInWithPassword({
+      if (isSignUp) {
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
         });
-        if (err) throw err;
-        setMessage('Successfully signed in!');
-        setTimeout(() => {
-          onSuccess?.();
-          onClose();
-        }, 500);
-      } else {
-        const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-
-        if (signUpErr && !signUpErr.message.includes('already registered')) {
-          throw signUpErr;
-        }
-
-        // Instantly sign in directly without email confirmation
-        const { error: signInErr } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
-        if (signInErr) {
-          if (signUpData.user) {
-            setMessage('Account created successfully! Logging you in…');
-          } else {
-            throw signInErr;
-          }
+        if (error) throw error;
+        if (data.user && !data.session) {
+          setMessage('Account created! Please check your email to verify your account.');
         } else {
-          setMessage('Account active and signed in successfully!');
+          setMessage('Account created successfully! You are now logged in.');
+          setTimeout(() => {
+            onClose();
+          }, 1500);
         }
-
-        setTimeout(() => {
-          onSuccess?.();
-          onClose();
-        }, 500);
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+        onClose();
       }
     } catch (err: any) {
-      setError(err.message || 'Authentication failed. Please check your credentials.');
+      setError(err.message || 'An error occurred during authentication.');
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: '#ffffff', color: '#0f172a', border: '1px solid #e2e8f0', borderRadius: 12, width: '100%', maxWidth: 400, padding: 28, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {mode === 'signin' ? <LogIn size={20} color="#2563eb" /> : <UserPlus size={20} color="#2563eb" />}
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
-              {mode === 'signin' ? 'Sign In' : 'Create Account'}
-            </h2>
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 1000, padding: 16
+    }}>
+      <div style={{
+        background: 'var(--card)', border: '1px solid var(--border)',
+        borderRadius: 12, width: '100%', maxWidth: 400, padding: 24,
+        position: 'relative', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)'
+      }}>
+        <button
+          onClick={onClose}
+          style={{
+            position: 'absolute', top: 16, right: 16, background: 'none',
+            border: 'none', color: 'var(--muted-foreground)', cursor: 'pointer'
+          }}
+        >
+          <X size={18} />
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: '50%', background: 'rgba(37,99,235,0.1)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)'
+          }}>
+            {isSignUp ? <UserPlus size={18} /> : <LogIn size={18} />}
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}>
-            <X size={18} />
-          </button>
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>
+              {isSignUp ? 'Create Business Account' : 'Sign In to Motolarry'}
+            </h2>
+            <p style={{ fontSize: 12, color: 'var(--muted-foreground)', margin: '2px 0 0' }}>
+              {isSignUp ? 'Start managing your products & POS' : 'Access your isolated inventory & sales'}
+            </p>
+          </div>
         </div>
 
-        <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20, lineHeight: 1.5 }}>
-          {mode === 'signin'
-            ? 'Authenticate using your credentials to enter the Motolarry terminal.'
-            : 'Register a new operator account for instant terminal access.'}
-        </p>
-
         {error && (
-          <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, padding: '10px 12px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#ef4444' }}>
-            <AlertCircle size={15} style={{ flexShrink: 0 }} />
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: 6, padding: '10px 12px', marginBottom: 16, fontSize: 13,
+            color: '#ef4444', display: 'flex', alignItems: 'center', gap: 8
+          }}>
+            <AlertCircle size={16} />
             <span>{error}</span>
           </div>
         )}
 
         {message && (
-          <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 6, padding: '10px 12px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#22c55e' }}>
-            <CheckCircle size={15} style={{ flexShrink: 0 }} />
-            <span>{message}</span>
+          <div style={{
+            background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)',
+            borderRadius: 6, padding: '10px 12px', marginBottom: 16, fontSize: 13,
+            color: '#16a34a'
+          }}>
+            {message}
           </div>
         )}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Email Address</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="user@example.com"
-              style={{ width: '100%' }}
-            />
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: 'var(--muted-foreground)' }}>
+              Email Address
+            </label>
+            <div style={{ position: 'relative' }}>
+              <Mail size={16} style={{ position: 'absolute', left: 12, top: 10, color: 'var(--muted-foreground)' }} />
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="owner@motolarry.com"
+                style={{ width: '100%', paddingLeft: 36 }}
+              />
+            </div>
           </div>
 
           <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Password</label>
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="••••••••"
-              style={{ width: '100%' }}
-            />
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: 'var(--muted-foreground)' }}>
+              Password
+            </label>
+            <div style={{ position: 'relative' }}>
+              <Lock size={16} style={{ position: 'absolute', left: 12, top: 10, color: 'var(--muted-foreground)' }} />
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                style={{ width: '100%', paddingLeft: 36 }}
+              />
+            </div>
           </div>
 
           <button
             type="submit"
             disabled={loading}
             style={{
-              background: '#2563eb', color: '#ffffff',
-              border: 'none', borderRadius: 8, padding: '10px 16px',
-              fontWeight: 600, fontSize: 14, cursor: loading ? 'not-allowed' : 'pointer',
-              marginTop: 6, opacity: loading ? 0.7 : 1,
+              background: 'var(--primary)', color: 'var(--primary-foreground)',
+              padding: '10px 16px', borderRadius: 'var(--radius)', fontWeight: 600,
+              fontSize: 14, cursor: 'pointer', marginTop: 6, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', gap: 8
             }}
           >
-            {loading ? 'Processing…' : mode === 'signin' ? 'Sign In' : 'Create Account'}
+            {loading ? 'Processing...' : isSignUp ? 'Sign Up' : 'Sign In'}
           </button>
         </form>
 
-        <div style={{ marginTop: 20, textAlign: 'center', fontSize: 12, color: '#64748b' }}>
-          {mode === 'signin' ? (
-            <>
-              Need an account?{' '}
-              <button
-                type="button"
-                onClick={() => { setMode('signup'); setError(null); setMessage(null); }}
-                style={{ background: 'none', border: 'none', color: '#2563eb', fontWeight: 600, cursor: 'pointer', padding: 0 }}
-              >
-                Sign Up
-              </button>
-            </>
-          ) : (
-            <>
-              Already have an account?{' '}
-              <button
-                type="button"
-                onClick={() => { setMode('signin'); setError(null); setMessage(null); }}
-                style={{ background: 'none', border: 'none', color: '#2563eb', fontWeight: 600, cursor: 'pointer', padding: 0 }}
-              >
-                Sign In
-              </button>
-            </>
-          )}
+        <div style={{ marginTop: 20, textAlign: 'center', fontSize: 13, color: 'var(--muted-foreground)' }}>
+          {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+          <button
+            type="button"
+            onClick={() => {
+              setIsSignUp(!isSignUp);
+              setError(null);
+              setMessage(null);
+            }}
+            style={{
+              background: 'none', border: 'none', color: 'var(--primary)',
+              fontWeight: 600, cursor: 'pointer', padding: 0
+            }}
+          >
+            {isSignUp ? 'Sign In' : 'Sign Up'}
+          </button>
         </div>
       </div>
     </div>

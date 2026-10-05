@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Package, ShoppingCart, TrendingUp, Users,
   Truck, ArrowUpDown, Download, Settings, ChevronRight, Bell,
-  LogIn, LogOut, User, Receipt, BarChart3, Pin, PinOff, RefreshCw, Bot
+  LogIn, LogOut, User, Receipt, BarChart3, Pin, PinOff, RefreshCw, Bot, CheckSquare
 } from 'lucide-react';
 import { useData } from '../DataContext';
 import { supabase } from '../lib/supabase';
@@ -48,8 +48,9 @@ export default function Layout({ current, onNavigate, children }: Props) {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
-  const { products, settings, schemaMissing, syncNotice } = useData();
+  const { products, tasks, settings, schemaMissing, syncNotice } = useData();
   const lowStock = products.filter(p => p.active && p.qty <= p.reorderPoint).length;
+  const pendingTasks = tasks.filter(t => t.status === 'pending').length;
 
   const sidebarOpen = locked || hovered;
 
@@ -157,6 +158,9 @@ export default function Layout({ current, onNavigate, children }: Props) {
                     {sidebarOpen && item.id === 'products' && lowStock > 0 && (
                       <span style={{ marginLeft: 'auto', background: '#ef4444', color: '#fff', fontSize: 10, borderRadius: 10, padding: '1px 6px', fontFamily: 'var(--font-mono-face)' }}>{lowStock}</span>
                     )}
+                    {sidebarOpen && item.id === 'dashboard' && pendingTasks > 0 && (
+                      <span style={{ marginLeft: 'auto', background: 'var(--primary)', color: '#fff', fontSize: 10, borderRadius: 10, padding: '1px 6px', fontFamily: 'var(--font-mono-face)' }}>{pendingTasks} tasks</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -181,6 +185,12 @@ export default function Layout({ current, onNavigate, children }: Props) {
           </div>
 
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
+            {pendingTasks > 0 && (
+              <button onClick={() => onNavigate('dashboard')} style={{ background: 'none', border: 'none', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
+                <CheckSquare size={15} />{pendingTasks} tasks
+              </button>
+            )}
+
             {lowStock > 0 && (
               <button onClick={() => onNavigate('stock')} style={{ background: 'none', border: 'none', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
                 <Bell size={15} />{lowStock} low stock

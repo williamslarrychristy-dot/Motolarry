@@ -1,12 +1,12 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   TrendingUp, Package, AlertTriangle, DollarSign, ShoppingBag, Receipt,
   Layers, Coins, CreditCard, Tag, Landmark, Wallet, Layers2, FolderTree,
-  Award, AlertCircle, CheckCircle2, Calendar, Clock, Sparkles, Activity,
-  Percent, Users, Truck, ArrowUpRight, ArrowDownRight, Hash
+  Calendar, Clock, Sparkles, Activity, Percent, Users, Truck, ArrowUpRight,
+  ArrowDownRight, Hash, CheckSquare, Plus, CheckCircle2, Circle
 } from 'lucide-react';
-import { fmt } from '../store';
+import { fmt, Task, uid } from '../store';
 import { useData } from '../DataContext';
 
 function StatCard({ label, value, sub, icon, accent }: { label: string; value: string; sub?: string; icon: React.ReactNode; accent?: boolean }) {
@@ -43,11 +43,15 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function Dashboard() {
-  const { products, sales, expenses, customers, suppliers } = useData();
+  const { products, sales, expenses, customers, suppliers, tasks, setTasks, addTask } = useData();
+
+  // Task Creation State
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskPriority, setTaskPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  const [taskFilter, setTaskFilter] = useState<'all' | 'pending' | 'completed'>('pending');
 
   const activeProducts = useMemo(() => products.filter(p => p.active), [products]);
 
-  // Helper to compute sale profit with cost price fallback
   function getSaleProfit(s: any): number {
     if (s.profit && s.profit > 0) return s.profit;
     return s.items?.reduce((acc: number, item: any) => {
@@ -56,7 +60,6 @@ export default function Dashboard() {
     }, 0) ?? s.total;
   }
 
-  // Helper to compute total COGS for a set of sales
   function getSaleCOGS(s: any): number {
     return s.items?.reduce((acc: number, item: any) => {
       const cost = (item.costPrice && item.costPrice > 0) ? item.costPrice : 0;
@@ -64,7 +67,6 @@ export default function Dashboard() {
     }, 0) ?? 0;
   }
 
-  // Date filters
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10);
 
@@ -73,12 +75,10 @@ export default function Dashboard() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const thirtyDaysAgo = new Date(today); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  // Sales collections filtered by dates
   const todaySales = useMemo(() => sales.filter(s => new Date(s.timestamp) >= today), [sales, today]);
   const weekSales = useMemo(() => sales.filter(s => new Date(s.timestamp) >= week), [sales, week]);
   const monthSales = useMemo(() => sales.filter(s => new Date(s.timestamp) >= monthStart), [sales, monthStart]);
 
-  // Financial Calculations
   const todayRevenue = useMemo(() => todaySales.reduce((a, s) => a + s.total, 0), [todaySales]);
   const todayGrossProfit = useMemo(() => todaySales.reduce((a, s) => a + getSaleProfit(s), 0), [todaySales]);
   const todayExpenses = useMemo(() => expenses.filter(e => e.date === todayStr).reduce((a, e) => a + e.amount, 0), [expenses, todayStr]);
@@ -89,44 +89,27 @@ export default function Dashboard() {
   const weekExpenses = useMemo(() => expenses.filter(e => new Date(e.date) >= week).reduce((a, e) => a + e.amount, 0), [expenses, week]);
   const weekNetProfit = weekGrossProfit - weekExpenses;
 
-  // 1. Month's Revenue
   const monthRevenue = useMemo(() => monthSales.reduce((a, s) => a + s.total, 0), [monthSales]);
-
-  // 2. Month's Net Profit
   const monthGrossProfit = useMemo(() => monthSales.reduce((a, s) => a + getSaleProfit(s), 0), [monthSales]);
   const monthExpenses = useMemo(() => expenses.filter(e => new Date(e.date) >= monthStart).reduce((a, e) => a + e.amount, 0), [expenses, monthStart]);
   const monthNetProfit = monthGrossProfit - monthExpenses;
 
-  // 3. Total COGS
   const totalCOGS = useMemo(() => sales.reduce((a, s) => a + getSaleCOGS(s), 0), [sales]);
-
-  // 4. Total Discounts Given
   const totalDiscounts = useMemo(() => sales.reduce((a, s) => a + (s.discount || 0), 0), [sales]);
 
-  // 5. Total Credit Outstanding
   const creditOutstanding = useMemo(() => {
     return sales.reduce((a, s) => {
-      if (s.paymentMethod === 'credit' || s.paymentMethod === 'debt') {
+      if (s.payment === 'credit') {
         return a + (s.total - (s.amountPaid || 0));
       }
       return a;
     }, 0);
   }, [sales]);
 
-  // 6, 7, 8. Payment Method Collections Today
-  const cashCollectedToday = useMemo(() => {
-    return todaySales.reduce((a, s) => (s.paymentMethod === 'cash' ? a + s.total : a), 0);
-  }, [todaySales]);
+  const cashCollectedToday = useMemo(() => todaySales.reduce((a, s) => (s.payment === 'cash' ? a + s.total : a), 0), [todaySales]);
+  const posCollectedToday = useMemo(() => todaySales.reduce((a, s) => (s.payment === 'card' ? a + s.total : a), 0), [todaySales]);
+  const transferCollectedToday = useMemo(() => todaySales.reduce((a, s) => (s.payment === 'transfer' ? a + s.total : a), 0), [todaySales]);
 
-  const posCollectedToday = useMemo(() => {
-    return todaySales.reduce((a, s) => (s.paymentMethod === 'pos' || s.paymentMethod === 'card' ? a + s.total : a), 0);
-  }, [todaySales]);
-
-  const transferCollectedToday = useMemo(() => {
-    return todaySales.reduce((a, s) => (s.paymentMethod === 'transfer' ? a + s.total : a), 0);
-  }, [todaySales]);
-
-  // 5 Original Cards: Stock & Low Stock
   const totalStockUnits = useMemo(() => activeProducts.reduce((sum, p) => sum + (p.qty || 0), 0), [activeProducts]);
   const totalStockValue = useMemo(() => {
     return activeProducts.reduce((sum, p) => {
@@ -137,30 +120,19 @@ export default function Dashboard() {
 
   const lowStock = useMemo(() => activeProducts.filter(p => p.qty <= p.reorderPoint), [activeProducts]);
 
-  // Inventory Cards
-  // 9. Total Active SKUs
   const totalActiveSKUs = activeProducts.length;
-
-  // 10. Total Categories
   const totalCategories = useMemo(() => new Set(activeProducts.map(p => p.category).filter(Boolean)).size, [activeProducts]);
-
-  // 11. Total Brands
   const totalBrands = useMemo(() => new Set(activeProducts.map(p => p.brand).filter(Boolean)).size, [activeProducts]);
-
-  // 12. Out of Stock Items
   const outOfStockItems = useMemo(() => activeProducts.filter(p => p.qty <= 0), [activeProducts]);
 
-  // 13. Overstocked Items (qty > 3x reorder point or > 100)
   const overstockedItems = useMemo(() => {
     return activeProducts.filter(p => p.qty >= Math.max(p.reorderPoint * 3, 50));
   }, [activeProducts]);
 
-  // 14. New Products Added This Month
   const newProductsThisMonth = useMemo(() => {
     return activeProducts.filter(p => p.createdAt && new Date(p.createdAt) >= monthStart).length;
   }, [activeProducts, monthStart]);
 
-  // 15. Products Not Sold in 30 Days
   const productsNotSold30Days = useMemo(() => {
     const soldProductIds = new Set<string>();
     sales.forEach(s => {
@@ -171,7 +143,6 @@ export default function Dashboard() {
     return activeProducts.filter(p => !soldProductIds.has(p.id)).length;
   }, [activeProducts, sales, thirtyDaysAgo]);
 
-  // Top / Slow movers aggregated data
   const itemMovementMap = useMemo(() => {
     const map: Record<string, { name: string; qty: number; revenue: number }> = {};
     sales.forEach(sale => sale.items?.forEach(item => {
@@ -182,41 +153,22 @@ export default function Dashboard() {
     return map;
   }, [sales]);
 
-  // 16. Top 5 Fast Moving Items
-  const top5FastMoving = useMemo(() => {
-    return Object.values(itemMovementMap).sort((a, b) => b.qty - a.qty)[0];
-  }, [itemMovementMap]);
+  const top5FastMoving = useMemo(() => Object.values(itemMovementMap).sort((a, b) => b.qty - a.qty)[0], [itemMovementMap]);
+  const slowest5Moving = useMemo(() => Object.values(itemMovementMap).sort((a, b) => a.qty - b.qty)[0], [itemMovementMap]);
 
-  // 17. Slowest 5 Moving Items
-  const slowest5Moving = useMemo(() => {
-    return Object.values(itemMovementMap).sort((a, b) => a.qty - b.qty)[0];
-  }, [itemMovementMap]);
-
-  // Sales & Customer Cards
-  // 18. Total Sales Today count
   const todaySalesCount = todaySales.length;
-
-  // 19. Total Sales Week count
   const weekSalesCount = weekSales.length;
-
-  // 20. Total Sales Month count
   const monthSalesCount = monthSales.length;
 
-  // 21. Average Sale Value
   const avgSaleValue = useMemo(() => {
     if (sales.length === 0) return 0;
     const totalRev = sales.reduce((a, s) => a + s.total, 0);
     return totalRev / sales.length;
   }, [sales]);
 
-  // 22. Total Customers
   const totalCustomers = customers.length;
-
-  // Operational Cards
-  // 23. Total Suppliers
   const totalSuppliers = suppliers.length;
 
-  // Daily Chart Data
   const dailyData = useMemo(() => {
     const days = [];
     for (let i = 6; i >= 0; i--) {
@@ -237,6 +189,34 @@ export default function Dashboard() {
   const topProductsList = useMemo(() => {
     return Object.values(itemMovementMap).sort((a, b) => b.qty - a.qty).slice(0, 5);
   }, [itemMovementMap]);
+
+  async function handleCreateTask(e: React.FormEvent) {
+    e.preventDefault();
+    if (!taskTitle.trim()) return;
+
+    const newTask: Task = {
+      id: uid(),
+      title: taskTitle.trim(),
+      description: '',
+      status: 'pending',
+      priority: taskPriority,
+      createdAt: new Date().toISOString(),
+    };
+
+    await addTask(newTask);
+    setTaskTitle('');
+  }
+
+  function toggleTaskStatus(t: Task) {
+    const updated = tasks.map(item => item.id === t.id ? { ...item, status: (item.status === 'pending' ? 'completed' : 'pending') as any } : item);
+    setTasks(updated);
+  }
+
+  const filteredTasks = useMemo(() => {
+    if (taskFilter === 'pending') return tasks.filter(t => t.status === 'pending');
+    if (taskFilter === 'completed') return tasks.filter(t => t.status === 'completed');
+    return tasks;
+  }, [tasks, taskFilter]);
 
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto' }}>
@@ -279,7 +259,7 @@ export default function Dashboard() {
         <StatCard label="Total Active SKUs" value={`${totalActiveSKUs} SKUs`} sub="Active catalog items" icon={<Package size={16} />} />
         <StatCard label="Total Categories" value={String(totalCategories)} sub="Product categories" icon={<FolderTree size={16} />} />
         <StatCard label="Total Brands" value={String(totalBrands)} sub="Distinct brands" icon={<Tag size={16} />} />
-        <StatCard label="Out of Stock Items" value={String(outOfStockItems.length)} sub="Zero quantity items" icon={<AlertCircle size={16} />} accent={outOfStockItems.length > 0} />
+        <StatCard label="Out of Stock Items" value={String(outOfStockItems.length)} sub="Zero quantity items" icon={<AlertTriangle size={16} />} accent={outOfStockItems.length > 0} />
         <StatCard label="Overstocked Items" value={String(overstockedItems.length)} sub="High volume stock" icon={<Layers2 size={16} />} />
         <StatCard label="New Products (Month)" value={String(newProductsThisMonth)} sub="Added this month" icon={<Sparkles size={16} />} />
         <StatCard label="Unsold in 30 Days" value={String(productsNotSold30Days)} sub="Idle inventory" icon={<Clock size={16} />} />
@@ -295,6 +275,73 @@ export default function Dashboard() {
 
         {/* Operational Cards (1 new) */}
         <StatCard label="Total Suppliers" value={String(totalSuppliers)} sub="Active vendors" icon={<Truck size={16} />} />
+      </div>
+
+      {/* Tasks, Missions & Reminders Widget */}
+      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 20, marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <CheckSquare size={18} color="var(--primary)" />
+            <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>Business Missions & Operational Tasks</h3>
+          </div>
+
+          <div style={{ display: 'flex', gap: 6 }}>
+            {(['pending', 'completed', 'all'] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => setTaskFilter(f)}
+                style={{
+                  padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 4,
+                  background: taskFilter === f ? 'var(--primary)' : 'var(--secondary)',
+                  color: taskFilter === f ? '#fff' : 'var(--muted-foreground)', textTransform: 'capitalize'
+                }}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <form onSubmit={handleCreateTask} style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          <input
+            placeholder="Add operational task e.g., 'Restock Lippo Brake Shoes', 'Reconcile cash float'..."
+            value={taskTitle}
+            onChange={e => setTaskTitle(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <select value={taskPriority} onChange={e => setTaskPriority(e.target.value as any)} style={{ width: 110 }}>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+          <button type="submit" style={{ background: 'var(--primary)', color: '#fff', padding: '0 14px', borderRadius: 'var(--radius)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Plus size={14} /> Add
+          </button>
+        </form>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {filteredTasks.length === 0 ? (
+            <div style={{ color: 'var(--muted-foreground)', fontSize: 12, textAlign: 'center', padding: '12px 0' }}>No tasks found</div>
+          ) : filteredTasks.map(t => (
+            <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--secondary)', padding: '8px 12px', borderRadius: 6, fontSize: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button onClick={() => toggleTaskStatus(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: t.status === 'completed' ? '#16a34a' : 'var(--muted-foreground)' }}>
+                  {t.status === 'completed' ? <CheckCircle2 size={16} /> : <Circle size={16} />}
+                </button>
+                <span style={{ textDecoration: t.status === 'completed' ? 'line-through' : 'none', color: t.status === 'completed' ? 'var(--muted-foreground)' : 'var(--foreground)' }}>
+                  {t.title}
+                </span>
+              </div>
+              <span style={{
+                fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase',
+                background: t.priority === 'high' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(37, 99, 235, 0.15)',
+                color: t.priority === 'high' ? '#ef4444' : 'var(--primary)'
+              }}>
+                {t.priority}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16, marginBottom: 16 }}>
